@@ -59,7 +59,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 ## 🏛️ Mimari
 
 ```
-┌─────────────────────────────────────────────────┐
+┌───────────────────────────────────────────-──────┐
 │                  ToprakGPT                       │
 │                                                  │
 │  Input IDs ──► Token Embedding ──┐               │
@@ -67,19 +67,19 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 │  Positions ──► Position Embedding┘               │
 │                      │                           │
 │              ┌───────▼────────┐                  │
-│              │ TransformerBlock│ × N              │
-│              │                │                  │
-│              │  ┌──────────┐  │                  │
-│              │  │ LayerNorm │  │                  │
-│              │  │ Multi-Head│  │                  │
-│              │  │ Attention │  │  Pre-LN          │
-│              │  │ + Residual│  │  Architecture    │
-│              │  ├──────────┤  │                  │
-│              │  │ LayerNorm │  │                  │
-│              │  │ FFN (GELU)│  │                  │
-│              │  │ + Residual│  │                  │
-│              │  └──────────┘  │                  │
-│              └───────┬────────┘                  │
+│              │ TransformerBlock│ × N             │
+│              │                 │                 │
+│              │  ┌──────────┐   │                 │
+│              │  │ LayerNorm │  │                 │
+│              │  │ Multi-Head│  │                 │
+│              │  │ Attention │  │  Pre-LN         │
+│              │  │ + Residual│  │  Architecture   │
+│              │  ├──────────┤   │                 │
+│              │  │ LayerNorm │  │                 │
+│              │  │ FFN (GELU)│  │                 │
+│              │  │ + Residual│  │                 │
+│              │  └──────────┘   │                 │
+│              └───────┬───────-─┘                 │
 │                      │                           │
 │              ┌───────▼────────┐                  │
 │              │  Final LN      │                  │
@@ -87,7 +87,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 │              └───────┬────────┘                  │
 │                      │                           │
 │                   Logits                         │
-└─────────────────────────────────────────────────┘
+└──────────────────────────────────────────────-───┘
 ```
 
 **Temel tasarım kararları:**
@@ -151,7 +151,7 @@ toprak/
 
 ```bash
 # 1. Projeyi klonla
-git clone https://github.com/KULLANICI_ADI/toprak.git
+git clone https://github.com/yabasi/toprak.git
 cd toprak
 
 # 2. Sanal ortam oluştur ve aktif et
