@@ -23,22 +23,22 @@
 
 ---
 
-## 🇹🇷 Neden Toprak?
+## Neden Toprak?
 
 Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfırdan yazılmış açık kaynak bir model neredeyse yok**. Mevcut Türkçe modellerin çoğu, İngilizce modellerin üzerine fine-tune edilmiş versiyonlardır — Türkçe'nin zengin morfolojisini, ekleme yapısını ve dilbilgisini tam olarak kavrayamazlar.
 
 **Toprak**, bu eksikliği gidermek için doğdu:
 
-- 🏗️ **Sıfırdan inşa** — Hiçbir mevcut modelden fine-tune yapılmıyor. Mimari, tokenizer, ağırlıklar — her şey bu proje kapsamında yazılıyor.
-- 🇹🇷 **Türkçe'ye özel** — 32.000 kelimelik Türkçe BPE tokenizer, `ç`, `ğ`, `ı`, `ö`, `ş`, `ü` karakterlerine tam destek.
-- 🍎 **Apple Silicon optimizasyonu** — M4 Pro / MPS (Metal GPU) üzerinde bfloat16 mixed precision ile eğitim.
-- 📖 **Tamamen açık kaynak** — Kod, mimari, eğitim süreci — her şey şeffaf ve erişilebilir.
+- **Sıfırdan inşa** — Hiçbir mevcut modelden fine-tune yapılmıyor. Mimari, tokenizer, ağırlıklar — her şey bu proje kapsamında yazılıyor.
+- **Türkçe'ye özel** — 32.000 kelimelik Türkçe BPE tokenizer, `ç`, `ğ`, `ı`, `ö`, `ş`, `ü` karakterlerine tam destek.
+- **Apple Silicon optimizasyonu** — M4 Pro / MPS (Metal GPU) üzerinde bfloat16 mixed precision ile eğitim.
+- **Tamamen açık kaynak** — Kod, mimari, eğitim süreci — her şey şeffaf ve erişilebilir.
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
 ---
 
-## ⚡ Hızlı Bakış
+## Hızlı Bakış
 
 | | Detay |
 |---|---|
@@ -56,7 +56,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 ---
 
-## 🏛️ Mimari
+## Mimari
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -98,39 +98,39 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 ---
 
-## 📁 Proje Yapısı
+## Proje Yapısı
 
 ```
 toprak/
 │
-├── model/                        # 🧠 Model Mimarisi
+├── model/                        # Model Mimarisi
 │   ├── config.py                 #    Model konfigürasyonları (Small / Medium)
 │   ├── attention.py              #    Multi-Head Self-Attention + Causal Mask
 │   ├── transformer.py            #    ToprakLM — Ana model sınıfı
 │   └── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
 │
-├── data/                         # 📦 Veri Toplama & İşleme
+├── data/                         # Veri Toplama & İşleme
 │   ├── sources.py                #    Türkçe kaynak URL'leri ve yapılandırma
 │   ├── crawler.py                #    asyncio + aiohttp web crawler
 │   ├── cleaner.py                #    7 aşamalı veri temizleme pipeline
 │   └── dataset.py                #    PyTorch Dataset + DataLoader
 │
-├── training/                     # 🏋️ Eğitim
+├── training/                     # Eğitim
 │   ├── train.py                  #    CLI — Ana eğitim entry point
 │   ├── trainer.py                #    Eğitim döngüsü, checkpoint, logging
 │   └── scheduler.py              #    Cosine warmup LR scheduler
 │
-├── inference/                    # 💬 Çıkarım & Sohbet
+├── inference/                    # Çıkarım & Sohbet
 │   ├── generate.py               #    Metin üretimi (top-k, top-p, repetition penalty)
 │   └── chat.py                   #    Terminal tabanlı interaktif sohbet
 │
-├── evaluation/                   # 📊 Değerlendirme
+├── evaluation/                   # Değerlendirme
 │   └── eval.py                   #    Perplexity hesaplama
 │
-├── upload/                       # 🤗 HuggingFace Entegrasyonu
+├── upload/                       # HuggingFace Entegrasyonu
 │   └── push_to_hub.py            #    Model + tokenizer yükleme
 │
-├── scripts/                      # 🔧 Yardımcı Araçlar
+├── scripts/                      # Yardımcı Araçlar
 │   └── prepare_data.py           #    Uçtan uca veri pipeline
 │
 ├── requirements.txt              #    Python bağımlılıkları
@@ -139,7 +139,7 @@ toprak/
 
 ---
 
-## 🚀 Kurulum
+## Kurulum
 
 ### Gereksinimler
 
@@ -167,9 +167,9 @@ python3 -c "import torch; print('MPS kullanılabilir:', torch.backends.mps.is_av
 
 ---
 
-## � Kullanım
+## Kullanım
 
-### 1️⃣ Veri Hazırlama
+### Veri Hazırlama
 
 Tüm pipeline'ı tek komutla çalıştır — Wikipedia indir → tokenizer eğit → veriyi temizle:
 
@@ -178,7 +178,7 @@ python3 scripts/prepare_data.py
 ```
 
 <details>
-<summary>🔽 Adım adım çalıştırma (isteğe bağlı)</summary>
+<summary>Adım adım çalıştırma (isteğe bağlı)</summary>
 
 ```bash
 # Sadece Wikipedia indir
@@ -196,7 +196,7 @@ python3 scripts/prepare_data.py --step prepare
 
 </details>
 
-### 2️⃣ Model Eğitimi
+### Model Eğitimi
 
 ```bash
 python3 training/train.py \
@@ -207,7 +207,7 @@ python3 training/train.py \
 ```
 
 <details>
-<summary>🔽 Eğitim parametreleri ve devam etme</summary>
+<summary>Eğitim parametreleri ve devam etme</summary>
 
 | Parametre | Küçük Model | Orta Model |
 |---|---|---|
@@ -227,7 +227,7 @@ python3 training/train.py \
 
 </details>
 
-### 3️⃣ Sohbet
+### Sohbet
 
 ```bash
 python3 inference/chat.py \
@@ -251,7 +251,7 @@ python3 inference/generate.py \
   --num-samples 3
 ```
 
-### 5️⃣ Değerlendirme
+### Değerlendirme
 
 ```bash
 python3 evaluation/eval.py \
@@ -268,7 +268,7 @@ python3 evaluation/eval.py \
 
 ---
 
-## 🔄 Geliştirme Döngüsü
+## Geliştirme Döngüsü
 
 ```
    ┌──────────┐     ┌──────────┐     ┌──────────┐
@@ -307,7 +307,7 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 
 ---
 
-## 🗺️ Yol Haritası
+## Yol Haritası
 
 | Aşama | Hedef | Durum |
 |---|---|---|
@@ -318,7 +318,7 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 
 ---
 
-## 🤝 Katkı
+## Katkı
 
 Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
@@ -329,15 +329,15 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 5. **Pull Request** açın
 
 **Katkı alanları:**
-- 🌐 Yeni Türkçe veri kaynakları ekleme
-- 🧪 Test ve benchmark'lar
-- 📚 Dokümantasyon iyileştirmeleri
-- 🐛 Bug fix'ler
-- 🚀 Performans optimizasyonları
+- Yeni Türkçe veri kaynakları ekleme
+- Test ve benchmark'lar
+- Dokümantasyon iyileştirmeleri
+- Bug fix'ler
+- Performans optimizasyonları
 
 ---
 
-## 📊 Teknik Detaylar
+## Teknik Detaylar
 
 <details>
 <summary><strong>Veri Pipeline</strong></summary>
@@ -385,7 +385,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
 ---
 
-## 📅 Beklentiler
+## Beklentiler
 
 > **Önemli:** Bu bir araştırma projesidir. İlk modelin mükemmel olmaması başarısızlık değil — sürecin doğal bir parçasıdır.
 
@@ -399,7 +399,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
 ---
 
-## 📜 Lisans
+## Lisans
 
 Bu proje [MIT Lisansı](LICENSE) altında yayınlanmıştır. Herkes özgürce kullanabilir, değiştirebilir ve dağıtabilir.
 
