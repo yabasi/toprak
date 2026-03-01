@@ -9,7 +9,7 @@ from typing import Optional
 
 @dataclass
 class ModelConfig:
-    """Toprak GPT model konfigürasyonu."""
+    """Toprak LM model konfigürasyonu."""
 
     # Model mimarisi
     vocab_size: int = 32_000

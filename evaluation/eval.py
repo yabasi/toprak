@@ -13,14 +13,14 @@ import torch
 from tqdm import tqdm
 
 from model.config import ModelConfig, TOPRAK_SMALL
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 from data.dataset import ToprakDataset, create_dataloader
 
 
 @torch.no_grad()
 def compute_perplexity(
-    model: ToprakGPT,
+    model: ToprakLM,
     dataloader,
     device: str = "mps",
     max_batches: int = 200,
@@ -32,7 +32,7 @@ def compute_perplexity(
     Düşük perplexity = daha iyi model.
 
     Args:
-        model: ToprakGPT modeli
+        model: ToprakLM modeli
         dataloader: Eval DataLoader
         device: Hesaplama cihazı
         max_batches: Maksimum batch sayısı
@@ -98,7 +98,7 @@ def evaluate_model(
     config.device = device
 
     # Model
-    model = ToprakGPT(config).to(device)
+    model = ToprakLM(config).to(device)
 
     # Checkpoint yükle
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)

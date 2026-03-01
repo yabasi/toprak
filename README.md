@@ -60,7 +60,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 ```
 ┌───────────────────────────────────────────-──────┐
-│                  ToprakGPT                       │
+│                  ToprakLM                        │
 │                                                  │
 │  Input IDs ──► Token Embedding ──┐               │
 │                                  ├──► + ──► Dropout
@@ -106,7 +106,7 @@ toprak/
 ├── model/                        # 🧠 Model Mimarisi
 │   ├── config.py                 #    Model konfigürasyonları (Small / Medium)
 │   ├── attention.py              #    Multi-Head Self-Attention + Causal Mask
-│   ├── transformer.py            #    ToprakGPT — Ana model sınıfı
+│   ├── transformer.py            #    ToprakLM — Ana model sınıfı
 │   └── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
 │
 ├── data/                         # 📦 Veri Toplama & İşleme

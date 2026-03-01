@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 
 from model.config import ModelConfig, TOPRAK_SMALL, TOPRAK_MEDIUM
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 from data.dataset import ToprakDataset, create_dataloader
 from training.trainer import ToprakTrainer
@@ -155,7 +155,7 @@ def main():
     # ─────────────────────────────────────────────
     # 4. Model
     # ─────────────────────────────────────────────
-    model = ToprakGPT(config)
+    model = ToprakLM(config)
     param_count = model.count_parameters()
     print(f"\n🧠 Model oluşturuldu: {param_count/1e6:.1f}M parametre")
 

@@ -12,13 +12,13 @@ import torch
 from transformers import PreTrainedModel, PretrainedConfig
 
 from model.config import ModelConfig, TOPRAK_SMALL
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 
 
 class ToprakConfig(PretrainedConfig):
     """HuggingFace uyumlu Toprak konfigürasyonu."""
 
-    model_type = "toprak_gpt"
+    model_type = "toprak_lm"
 
     def __init__(
         self,
@@ -73,7 +73,7 @@ class ToprakForCausalLM(PreTrainedModel):
     def __init__(self, config: ToprakConfig):
         super().__init__(config)
         model_config = config.to_model_config()
-        self.model = ToprakGPT(model_config)
+        self.model = ToprakLM(model_config)
 
     def forward(self, input_ids, labels=None, **kwargs):
         logits, loss = self.model(input_ids, targets=labels)
@@ -165,13 +165,13 @@ pipeline_tag: text-generation
 
 # 🌱 Toprak — Türkçe Dil Modeli
 
-Sıfırdan eğitilmiş, tamamen özgün bir Türkçe GPT dil modeli.
+Sıfırdan eğitilmiş, tamamen özgün bir Türkçe dil modeli.
 
 ## Model Bilgileri
 
 | Özellik | Değer |
 |---|---|
-| Mimari | Decoder-only Transformer (GPT-2 tarzı) |
+| Mimari | Decoder-only Transformer |
 | Parametreler | {param_count} |
 | Vocab Size | {vocab_size} |
 | Context Length | {max_seq_len} |
@@ -180,11 +180,11 @@ Sıfırdan eğitilmiş, tamamen özgün bir Türkçe GPT dil modeli.
 ## Kullanım
 
 ```python
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 
 tokenizer = ToprakTokenizer("toprak_tokenizer.model")
-model = ToprakGPT.from_pretrained("repo-adi/toprak-v1")
+model = ToprakLM.from_pretrained("repo-adi/toprak-v1")
 ```
 
 ## Limitasyonlar

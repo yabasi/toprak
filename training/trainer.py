@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 
 from model.config import ModelConfig
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from training.scheduler import CosineWarmupScheduler
 
 
@@ -31,7 +31,7 @@ class ToprakTrainer:
 
     def __init__(
         self,
-        model: ToprakGPT,
+        model: ToprakLM,
         config: ModelConfig,
         train_dataloader,
         eval_dataloader=None,

@@ -11,13 +11,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 
 from model.config import ModelConfig, TOPRAK_SMALL
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 from inference.generate import load_model, generate_text
 
 
 def chat(
-    model: ToprakGPT,
+    model: ToprakLM,
     tokenizer: ToprakTokenizer,
     device: str = "mps",
     max_new_tokens: int = 300,

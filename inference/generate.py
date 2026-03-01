@@ -11,12 +11,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import torch
 
 from model.config import ModelConfig, TOPRAK_SMALL
-from model.transformer import ToprakGPT
+from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 
 
 def generate_text(
-    model: ToprakGPT,
+    model: ToprakLM,
     tokenizer: ToprakTokenizer,
     prompt: str,
     max_new_tokens: int = 200,
@@ -114,7 +114,7 @@ def load_model(
         config = ModelConfig(**cfg_dict) if cfg_dict else TOPRAK_SMALL
 
     config.device = device
-    model = ToprakGPT(config).to(device)
+    model = ToprakLM(config).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
 

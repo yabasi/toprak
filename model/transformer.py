@@ -1,5 +1,5 @@
 """
-Toprak — GPT Transformer Mimarisi
+Toprak — Transformer Mimarisi
 Decoder-only Transformer, sıfırdan Türkçe dil modeli
 """
 
@@ -45,9 +45,9 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class ToprakGPT(nn.Module):
+class ToprakLM(nn.Module):
     """
-    Toprak — Sıfırdan Türkçe GPT Dil Modeli
+    Toprak — Sıfırdan Türkçe Dil Modeli
 
     Decoder-only Transformer mimarisi.
     Token embedding + Positional embedding → N × TransformerBlock → LM Head
