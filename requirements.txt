@@ -1,0 +1,30 @@
+# PyTorch
+torch>=2.0.0
+torchvision
+torchaudio
+
+# Tokenizer
+sentencepiece>=0.1.99
+
+# HuggingFace
+transformers>=4.30.0
+datasets>=2.14.0
+huggingface_hub>=0.16.0
+
+# Web Crawler
+aiohttp>=3.8.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Veri İşleme
+langdetect>=1.0.9
+tqdm>=4.65.0
+numpy>=1.24.0
+
+# Apple Silicon
+mlx>=0.1.0
+mlx-lm>=0.1.0
+
+# Utilities
+requests>=2.31.0
+urllib3>=2.0.0

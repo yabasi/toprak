@@ -1,0 +1,118 @@
+# ═══════════════════════════════════════════════════════
+#  🌱 Toprak — Sıfırdan Türkçe Dil Modeli
+#  .gitignore — Versiyon Kontrol Dışı Bırakılan Dosyalar
+# ═══════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────────────
+#  Python
+# ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+*.whl
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ─────────────────────────────────────────────────────
+#  Virtual Environments
+# ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ─────────────────────────────────────────────────────
+#  Eğitim Verisi & Önbellek
+#  (Büyük dosyalar — GitHub'a yüklenmez)
+# ─────────────────────────────────────────────────────
+data_cache/
+*.jsonl
+*.bin
+*.npy
+*.npz
+*.memmap
+*.h5
+*.hdf5
+
+# ─────────────────────────────────────────────────────
+#  Model Checkpoint'leri
+#  (Yüzlerce MB — HuggingFace Hub'da paylaşılır)
+# ─────────────────────────────────────────────────────
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+
+# ─────────────────────────────────────────────────────
+#  Tokenizer Model Dosyaları
+#  (SentencePiece binary — ayrıca release'de paylaşılır)
+# ─────────────────────────────────────────────────────
+*.model
+*.vocab
+
+# ─────────────────────────────────────────────────────
+#  Jupyter Notebook
+# ─────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ─────────────────────────────────────────────────────
+#  IDE & Editör
+# ─────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ─────────────────────────────────────────────────────
+#  İşletim Sistemi
+# ─────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ─────────────────────────────────────────────────────
+#  Logging & Monitoring
+# ─────────────────────────────────────────────────────
+*.log
+logs/
+wandb/
+runs/
+mlruns/
+tensorboard/
+
+# ─────────────────────────────────────────────────────
+#  Güvenlik — Asla Commit'lenmesin
+# ─────────────────────────────────────────────────────
+.env
+.env.local
+*.pem
+*.key
+secrets.yaml
+secrets.json
+**/credentials*
+**/token*
+!model/tokenizer.py
+
+# ─────────────────────────────────────────────────────
+#  Proje Kılavuzu (Kişisel Doküman)
+# ─────────────────────────────────────────────────────
+TurkishLLM_Proje_Kilavuzu.docx
