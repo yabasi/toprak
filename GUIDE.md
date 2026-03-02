@@ -264,10 +264,10 @@ python3 upload/push_to_hub.py \
 
 | Boyut | Parametre | Eğitim Süresi (M4 Pro) | Eğitim Süresi (RTX 4090) | Komut |
 |---|---|---|---|---|
-| **small** | ~80M | ~8-12 saat | ~30 dk | `--model-size small` |
-| **medium** | ~125M | ~1-2 gün | ~2-3 saat | `--model-size medium` |
-| **large** | ~342M | ~4-5 gün | ~6-8 saat | `--model-size large` |
-| **xl** | ~941M | ⚠️ Çok yavaş | ~18-24 saat | `--model-size xl` |
+| **small** | ~80M | ~1-2 gün | ~30 dk | `--model-size small` |
+| **medium** | ~125M | ~4-6 gün | ~2-3 saat | `--model-size medium` |
+| **large** | ~342M | ⚠️ RTX 4090 önerilir | ~6-8 saat | `--model-size large` |
+| **xl** | ~941M | ⚠️ RTX 4090 gerekli | ~18-24 saat | `--model-size xl` |
 
 > 💡 **Öneri:** M4 Pro'da `small` veya `medium` ile başla. `large` ve `xl` için RTX 4090 sunucu kirala.
 
@@ -304,12 +304,12 @@ python3 upload/push_to_hub.py \
 | layers | 14 | 16 | 28 | 36 |
 | heads | 10 | 12 | 16 | 16 |
 | kv_heads | 2 | 4 | 4 | 4 |
-| max_seq_len | 512 | 1024 | 2048 | 2048 |
+| max_seq_len | 512 | 512 | 2048 | 2048 |
 | batch_size | 16 | 8 | 4 | 2 |
-| grad_accum | 4 | 8 | 16 | 32 |
-| efektif batch | 64 | 64 | 64 | 64 |
+| grad_accum | 4 | 4 | 16 | 32 |
+| efektif batch | 64 | 32 | 64 | 64 |
 | learning_rate | 1e-4 | 1e-4 | 3e-4 | 3e-4 |
-| max_steps | 100K | 200K | 300K | 500K |
+| max_steps | 100K | 100K | 300K | 500K |
 
 ---
 

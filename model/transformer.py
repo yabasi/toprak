@@ -133,7 +133,7 @@ class ToprakLM(nn.Module):
         # Ağırlıkları başlat
         self.apply(self._init_weights)
 
-        # Residual projeksiyonlar için özel init (GPT-NeoX tarzı)
+        # Residual projeksiyonlar için özel scaled init
         for name, p in self.named_parameters():
             if name.endswith("out_proj.weight") or name.endswith("down_proj.weight"):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / (2 * config.num_layers) ** 0.5)

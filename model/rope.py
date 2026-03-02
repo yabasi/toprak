@@ -24,7 +24,7 @@ def precompute_freqs_cis(
     Args:
         dim: Head boyutu (head_dim) — çift sayı olmalı
         max_seq_len: Maksimum sequence uzunluğu
-        theta: Base frekans (LLaMA: 10000, bazı modeller 500000)
+        theta: Base frekans (varsayılan: 10000, uzun context için 500000)
         device: Hesaplama cihazı
 
     Returns:

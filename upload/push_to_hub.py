@@ -166,7 +166,7 @@ language:
 license: mit
 tags:
   - turkish
-  - gpt
+  - transformer
   - text-generation
   - from-scratch
 pipeline_tag: text-generation

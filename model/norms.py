@@ -1,7 +1,7 @@
 """
 Toprak — RMSNorm
 Root Mean Square Layer Normalization — bias'sız, daha hızlı normalizasyon.
-LLaMA, Mistral, Gemma modellerinde kullanılan modern standart.
+Modern decoder-only mimarilerde kullanılan standart normalizasyon tekniği.
 """
 
 import torch

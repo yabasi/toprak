@@ -109,6 +109,8 @@ class ToprakTrainer:
         self.global_step = 0
         self.best_eval_loss = float("inf")
         self.train_losses = []
+        self.consecutive_nan_count = 0
+        self.max_consecutive_nan = 10  # Bu kadar arka arkaya nan olursa dur
 
         # Device
         self.device = config.device
@@ -152,6 +154,7 @@ class ToprakTrainer:
         start_time = time.time()
         step_start_time = time.time()
         tokens_processed = 0
+        nan_in_batch = False
 
         data_iter = iter(self.train_dataloader)
 
@@ -159,6 +162,7 @@ class ToprakTrainer:
             self.optimizer.zero_grad()
 
             # Gradient accumulation
+            nan_in_batch = False
             for micro_step in range(self.config.grad_accum_steps):
                 try:
                     batch = next(data_iter)
@@ -169,14 +173,21 @@ class ToprakTrainer:
                 input_ids = batch["input_ids"].to(self.device)
                 labels = batch["labels"].to(self.device)
 
-                # Mixed precision forward pass — MPS (bfloat16) / CUDA (float16)
-                if self.device in ("mps", "cpu"):
-                    with torch.autocast(device_type=self.device, dtype=torch.bfloat16, enabled=(self.device == "mps")):
-                        logits, loss, _ = self.model(input_ids, targets=labels)
-                else:
-                    # CUDA — float16 with GradScaler
+                # Forward pass
+                # NOT: MPS'de bfloat16 autocast, RoPE complex tensor
+                # işlemleriyle uyumsuz ve nan üretiyor. MPS zaten kendi
+                # optimizasyonlarını yapıyor, bu yüzden float32 kullanıyoruz.
+                if self.device == "cuda":
                     with torch.autocast(device_type="cuda", dtype=torch.float16):
                         logits, loss, _ = self.model(input_ids, targets=labels)
+                else:
+                    # MPS ve CPU — float32 (MPS autocast nan üretiyor)
+                    logits, loss, _ = self.model(input_ids, targets=labels)
+
+                # NaN/Inf loss kontrolü
+                if torch.isnan(loss) or torch.isinf(loss):
+                    nan_in_batch = True
+                    break
 
                 # Gradient accumulation: loss'u böl
                 loss = loss / self.config.grad_accum_steps
@@ -184,18 +195,51 @@ class ToprakTrainer:
                 accumulation_loss += loss.item()
                 tokens_processed += input_ids.numel()
 
+            # NaN batch kontrolü — gradient step'i atla
+            if nan_in_batch:
+                self.optimizer.zero_grad()  # Corrupt gradient'ları temizle
+                self.consecutive_nan_count += 1
+                lr = self.scheduler.step()  # Scheduler'ı yine ilerlet
+                self.global_step += 1
+                print(
+                    f"  ⚠ Step {self.global_step}: NaN loss tespit edildi, "
+                    f"gradient atlanıyor ({self.consecutive_nan_count}/{self.max_consecutive_nan})"
+                )
+                if self.consecutive_nan_count >= self.max_consecutive_nan:
+                    print(f"\n❌ Arka arkaya {self.max_consecutive_nan} NaN loss!")
+                    print(f"   Olası sebepler:")
+                    print(f"   - Learning rate çok yüksek (şu anki: {lr:.2e})")
+                    print(f"   - Veri bozuk (pad/unk token oranı çok yüksek)")
+                    print(f"   - Model ağırlıkları patladı")
+                    print(f"   Eğitim durduruluyor.")
+                    break
+                accumulation_loss = 0.0
+                continue
+
+            # Başarılı step — nan sayacını sıfırla
+            self.consecutive_nan_count = 0
+
             # Gradient clipping
             grad_norm = torch.nn.utils.clip_grad_norm_(
                 self.model.parameters(), self.config.gradient_clip
             )
+
+            # NaN gradient kontrolü
+            if isinstance(grad_norm, torch.Tensor) and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
+                self.optimizer.zero_grad()
+                lr = self.scheduler.step()
+                self.global_step += 1
+                print(f"  ⚠ Step {self.global_step}: NaN gradient norm, step atlanıyor")
+                accumulation_loss = 0.0
+                continue
 
             # Optimizer step
             self.optimizer.step()
             lr = self.scheduler.step()
             self.global_step += 1
 
-            # Logging (her 100 adımda)
-            if self.global_step % 100 == 0:
+            # Logging (her 10 adımda)
+            if self.global_step % 10 == 0:
                 elapsed = time.time() - start_time
                 step_time = time.time() - step_start_time
                 tokens_per_sec = tokens_processed / elapsed
@@ -218,8 +262,8 @@ class ToprakTrainer:
                     self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
 
                 step_start_time = time.time()
-
-            accumulation_loss = 0.0
+                accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla
+            # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
 
             # Checkpoint kaydet
             if self.global_step % self.config.save_every == 0:

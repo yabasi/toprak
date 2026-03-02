@@ -31,7 +31,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 - **Sıfırdan inşa** — Hiçbir mevcut modelden fine-tune yapılmıyor. Mimari, tokenizer, ağırlıklar — her şey bu proje kapsamında yazılıyor.
 - **Türkçe'ye özel** — 32.000 kelimelik Türkçe BPE tokenizer, `ç`, `ğ`, `ı`, `ö`, `ş`, `ü` karakterlerine tam destek.
-- **Apple Silicon optimizasyonu** — M4 Pro / MPS (Metal GPU) üzerinde bfloat16 mixed precision ile eğitim.
+- **Apple Silicon optimizasyonu** — M4 Pro / MPS (Metal GPU) üzerinde optimize float32 ile eğitim.
 - **Tamamen açık kaynak** — Kod, mimari, eğitim süreci — her şey şeffaf ve erişilebilir.
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
@@ -44,7 +44,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 | | Detay |
 |---|---|
-| **Mimari** | Decoder-only Transformer (LLaMA tarzı, 2024 nesil) |
+| **Mimari** | Decoder-only Transformer (modern 2024 nesil, sıfırdan tasarım) |
 | **Small** | ~80M parametre — `d_model=640`, `layers=14`, `heads=10`, `kv_heads=2` |
 | **Medium** | ~125M parametre — `d_model=768`, `layers=16`, `heads=12`, `kv_heads=4` |
 | **Large** | ~342M parametre — `d_model=1024`, `layers=28`, `heads=16`, `kv_heads=4` |
@@ -59,7 +59,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **Framework** | PyTorch 2.x + torch.compile() |
 | **Optimizer** | AdamW (weight decay=0.1, betas=0.9/0.95) |
 | **LR Scheduler** | Cosine annealing with linear warmup |
-| **Precision** | MPS: bfloat16 / CUDA: float16 mixed precision |
+| **Precision** | MPS: float32 / CUDA: float16 mixed precision |
 
 ---
 
@@ -96,7 +96,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Temel tasarım kararları (LLaMA/Mistral/Gemma tarzı):**
+**Temel tasarım kararları (modern 2024 decoder-only standartları):**
 - **RMSNorm**: Bias'sız, LayerNorm'dan ~%5-8 daha hızlı normalizasyon
 - **SwiGLU**: 3 katmanlı gated FFN (SiLU aktivasyonlu), GELU'dan daha düşük loss
 - **RoPE**: Rotary Position Embedding — relative position, extrapolation kabiliyeti
@@ -213,7 +213,7 @@ python3 scripts/prepare_data.py --step prepare
 
 ```bash
 python3 training/train.py \
-  --model-size small \
+  --model-size medium \
   --data-dir data_cache/clean/train \
   --eval-data-dir data_cache/clean/eval \
   --tokenizer toprak_tokenizer.model
@@ -225,10 +225,10 @@ python3 training/train.py \
 | Parametre | Küçük Model | Orta Model |
 |---|---|---|
 | `--model-size` | `small` | `medium` |
-| `--batch-size` | 8–16 | 4–8 |
-| `--grad-accum` | 4 | 8 |
-| `--max-steps` | 100,000 | 200,000 |
-| Tahmini süre (M4 Pro) | 2–3 gün | 5–7 gün |
+| `--batch-size` | 8–16 | 8 |
+| `--grad-accum` | 4 | 4 |
+| `--max-steps` | 100,000 | 100,000 |
+| Tahmini süre (M4 Pro) | 1–2 gün | 4–6 gün |
 
 ```bash
 # Kaldığın yerden devam et
@@ -324,10 +324,11 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 
 | Aşama | Hedef | Durum |
 |---|---|---|
-| **v0.1-alpha** | Altyapı kodu, tokenizer, ilk eğitim | 🔄 Devam ediyor |
-| **v0.2-beta** | 85M model, 5GB+ veri ile eğitim | ⏳ Planlandı |
-| **v1.0** | 125M model, 10GB veri, stabil versiyon | ⏳ Planlandı |
-| **v1.x** | Sürekli güncelleme, topluluk katkıları | ⏳ Planlandı |
+| **v0.1-alpha** | Altyapı kodu, tokenizer, veri pipeline | ✅ Tamamlandı |
+| **v0.2-beta** | 125M model (Medium), 207M token ile eğitim | 🔄 Eğitim devam ediyor |
+| **v1.0** | 125M model, 10GB+ veri, stabil versiyon | ⏳ Planlandı |
+| **v1.5** | 342M model (Large), RTX 4090 ile eğitim | ⏳ Planlandı |
+| **v2.0** | Sürekli güncelleme, topluluk katkıları, fine-tuning | ⏳ Planlandı |
 
 ---
 
@@ -363,7 +364,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **KV Cache**: Inference'da geçmiş key/value'ları sakla → her adımda sadece 1 token
 - **Bias-free**: Tüm Linear katmanlardan bias kaldırıldı
 - **Weight Tying**: Token embedding ↔ LM head aynı ağırlıklar
-- **Init**: GPT-NeoX tarzı — residual projeksiyonlar `1/√(2N)` ile scaled
+- **Init**: Scaled init — residual projeksiyonlar `1/√(2N)` ile ölçeklendirilmiş
 
 </details>
 
@@ -396,7 +397,8 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **SDPA**: PyTorch native scaled_dot_product_attention
 - **torch.compile()**: Model derleme ile %10-30 hız artışı
 - **Gradient Checkpointing**: FFN katmanlarında bellek tasarrufu
-- **Mixed Precision**: MPS (bfloat16) / CUDA (float16)
+- **Mixed Precision**: CUDA (float16) / MPS & CPU (float32 — RoPE complex tensor uyumluluğu için)
+- **NaN Guard**: Loss/gradient nan kontrolü, arka arkaya 10 nan'da erken durdurma
 - **Gradient Accumulation**: Küçük batch ile büyük efektif batch simülasyonu
 - **Gradient Clipping**: Max norm 1.0
 - **Checkpoint Strategy**: Her 5000 adımda kaydet, son 3'ü tut
@@ -429,7 +431,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 | İlk model (1–2 hafta) | Tutarsız, bazen anlamsız cümleler — **tamamen normal** |
 | v0.1 (1 ay) | Türkçe cümle yapısını kavramış, hatalar mevcut |
 | v0.5 (3 ay) | Konuya uygun cevaplar, tutarlılık artıyor |
-| v1.0 (6 ay) | Kullanılabilir Türkçe chatbot — GPT-2 seviyesi |
+| v1.0 (6 ay) | Kullanılabilir Türkçe metin üretici — tutarlı ve anlamlı çıktılar |
 | v2.0+ (1 yıl+) | Daha büyük model, daha fazla veri → gerçek kalite |
 
 ---

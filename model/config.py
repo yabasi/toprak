@@ -105,12 +105,12 @@ TOPRAK_MEDIUM = ModelConfig(
     num_kv_heads=4,
     num_layers=16,
     d_ff=_round_to_multiple(int(2 / 3 * 4 * 768)),
-    max_seq_len=1024,
+    max_seq_len=512,             # 1024→512: M4 Pro'da 2-3x hız artışı
     learning_rate=1e-4,
     batch_size=8,
-    grad_accum_steps=8,
-    warmup_steps=4000,
-    max_steps=200_000,
+    grad_accum_steps=4,          # 8→4: efektif batch 64→32, M4 Pro için dengeli
+    warmup_steps=2000,           # 4000→2000: toplam step'e orantılı
+    max_steps=100_000,           # 200K→100K: ilk iterasyon için yeterli
 )
 
 # ~350M parametre — M4 Pro'da eğitilebilir, RTX 4090'da hızlı
