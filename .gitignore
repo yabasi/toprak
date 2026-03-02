@@ -54,10 +54,9 @@ checkpoints/
 
 # ─────────────────────────────────────────────────────
 #  Tokenizer Model Dosyaları
-#  (SentencePiece binary — ayrıca release'de paylaşılır)
+#  Toprak tokenizer dosyaları kodla beraber yaşamalıdır.
 # ─────────────────────────────────────────────────────
-*.model
-*.vocab
+# *.model ve *.vocab artık bilerek gitignore dışı bırakıldı.
 
 # ─────────────────────────────────────────────────────
 #  Jupyter Notebook
