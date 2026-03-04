@@ -89,6 +89,30 @@ python3 training/train.py \
   --log-dir logs
 ```
 
+### Ünlü Uyumu Loss ile eğitim
+
+Türkçe'ye özel auxiliary loss — ünlü uyumuna aykırı token tahminlerini cezalandırır. Mevcut eğitime checkpoint'ten devam ederken eklenebilir.
+
+```bash
+# Ünlü uyumu loss aktif
+python3 training/train.py --model-size medium --vowel-harmony
+
+# Lambda ağırlığı ve warmup ayarla
+python3 training/train.py --model-size medium \
+  --vowel-harmony --vh-lambda 0.1 --vh-warmup-steps 1000
+
+# Mevcut eğitime ekleyerek devam et
+python3 training/train.py --model-size medium \
+  --resume checkpoints/toprak_step_17500.pt \
+  --vowel-harmony --vh-lambda 0.1 --vh-warmup-steps 1000
+```
+
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `--vowel-harmony` | Kapalı | Ünlü uyumu auxiliary loss'u aktifleştir |
+| `--vh-lambda` | 0.1 | Loss ağırlığı (0.05–0.3 arası önerilir) |
+| `--vh-warmup-steps` | 1000 | Lambda warmup adım sayısı (ani spike önleme) |
+
 ### Optimizasyonları kapatma
 
 ```bash
@@ -295,6 +319,9 @@ python3 upload/push_to_hub.py \
 | `--no-compile` | *(kapalı)* | torch.compile devre dışı bırak |
 | `--no-grad-checkpoint` | *(kapalı)* | Gradient checkpointing kapat |
 | `--log-dir` | logs | TensorBoard log dizini |
+| `--vowel-harmony` | *(kapalı)* | Ünlü uyumu auxiliary loss aktifleştir |
+| `--vh-lambda` | 0.1 | Ünlü uyumu loss ağırlığı |
+| `--vh-warmup-steps` | 1000 | Ünlü uyumu loss warmup adım sayısı |
 
 ### Modellerin varsayılan parametreleri
 

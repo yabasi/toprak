@@ -54,12 +54,14 @@ class ToprakTrainer:
         use_compile: bool = True,
         use_gradient_checkpointing: bool = True,
         log_dir: str = "logs",
+        vowel_harmony_loss=None,
     ):
         self.model = model
         self.config = config
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
         self.checkpoint_dir = checkpoint_dir
+        self.vowel_harmony_loss = vowel_harmony_loss
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -129,6 +131,13 @@ class ToprakTrainer:
         self.model.train()
         self.model.to(self.device)
 
+        # Ünlü Uyumu Loss — cihaza taşı ve warmup ayarla
+        if self.vowel_harmony_loss is not None:
+            self.vowel_harmony_loss.to(self.device)
+            if resume_from:
+                self.vowel_harmony_loss.start_step = self.global_step
+                print(f"  ✓ Ünlü uyumu loss warmup: step {self.global_step} → {self.global_step + self.vowel_harmony_loss.warmup_steps}")
+
         print(f"\n{'='*60}")
         print(f"🌱 Toprak Eğitimi Başlıyor")
         print(f"{'='*60}")
@@ -143,6 +152,7 @@ class ToprakTrainer:
         print(f"  torch.compile:       {'✅' if self.compiled else '❌'}")
         print(f"  Grad Checkpoint:     {'✅' if hasattr(self.model, 'gradient_checkpointing') and self.model.gradient_checkpointing else '❌'}")
         print(f"  TensorBoard:         {'✅' if self.writer else '❌'}")
+        print(f"  Ünlü Uyumu Loss:     {'✅ (λ=' + str(self.vowel_harmony_loss.lambda_weight) + ')' if self.vowel_harmony_loss else '❌'}")
         if self.writer:
             print(f"")
             print(f"  📊 Eğitim loglarını takip etmek için yeni bir terminalde:")
@@ -151,6 +161,7 @@ class ToprakTrainer:
         print(f"{'='*60}\n")
 
         accumulation_loss = 0.0
+        accumulation_vh_loss = 0.0
         start_time = time.time()
         step_start_time = time.time()
         tokens_processed = 0
@@ -158,132 +169,158 @@ class ToprakTrainer:
 
         data_iter = iter(self.train_dataloader)
 
-        while self.global_step < self.config.max_steps:
-            self.optimizer.zero_grad()
-
-            # Gradient accumulation
-            nan_in_batch = False
-            for micro_step in range(self.config.grad_accum_steps):
-                try:
-                    batch = next(data_iter)
-                except StopIteration:
-                    data_iter = iter(self.train_dataloader)
-                    batch = next(data_iter)
-
-                input_ids = batch["input_ids"].to(self.device)
-                labels = batch["labels"].to(self.device)
-
-                # Forward pass
-                # NOT: MPS'de bfloat16 autocast, RoPE complex tensor
-                # işlemleriyle uyumsuz ve nan üretiyor. MPS zaten kendi
-                # optimizasyonlarını yapıyor, bu yüzden float32 kullanıyoruz.
-                if self.device == "cuda":
-                    with torch.autocast(device_type="cuda", dtype=torch.float16):
-                        logits, loss, _ = self.model(input_ids, targets=labels)
-                else:
-                    # MPS ve CPU — float32 (MPS autocast nan üretiyor)
-                    logits, loss, _ = self.model(input_ids, targets=labels)
-
-                # NaN/Inf loss kontrolü
-                if torch.isnan(loss) or torch.isinf(loss):
-                    nan_in_batch = True
-                    break
-
-                # Gradient accumulation: loss'u böl
-                loss = loss / self.config.grad_accum_steps
-                loss.backward()
-                accumulation_loss += loss.item()
-                tokens_processed += input_ids.numel()
-
-            # NaN batch kontrolü — gradient step'i atla
-            if nan_in_batch:
-                self.optimizer.zero_grad()  # Corrupt gradient'ları temizle
-                self.consecutive_nan_count += 1
-                lr = self.scheduler.step()  # Scheduler'ı yine ilerlet
-                self.global_step += 1
-                print(
-                    f"  ⚠ Step {self.global_step}: NaN loss tespit edildi, "
-                    f"gradient atlanıyor ({self.consecutive_nan_count}/{self.max_consecutive_nan})"
-                )
-                if self.consecutive_nan_count >= self.max_consecutive_nan:
-                    print(f"\n❌ Arka arkaya {self.max_consecutive_nan} NaN loss!")
-                    print(f"   Olası sebepler:")
-                    print(f"   - Learning rate çok yüksek (şu anki: {lr:.2e})")
-                    print(f"   - Veri bozuk (pad/unk token oranı çok yüksek)")
-                    print(f"   - Model ağırlıkları patladı")
-                    print(f"   Eğitim durduruluyor.")
-                    break
-                accumulation_loss = 0.0
-                continue
-
-            # Başarılı step — nan sayacını sıfırla
-            self.consecutive_nan_count = 0
-
-            # Gradient clipping
-            grad_norm = torch.nn.utils.clip_grad_norm_(
-                self.model.parameters(), self.config.gradient_clip
-            )
-
-            # NaN gradient kontrolü
-            if isinstance(grad_norm, torch.Tensor) and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
+        try:
+            while self.global_step < self.config.max_steps:
                 self.optimizer.zero_grad()
+
+                # Gradient accumulation
+                nan_in_batch = False
+                for micro_step in range(self.config.grad_accum_steps):
+                    try:
+                        batch = next(data_iter)
+                    except StopIteration:
+                        data_iter = iter(self.train_dataloader)
+                        batch = next(data_iter)
+
+                    input_ids = batch["input_ids"].to(self.device)
+                    labels = batch["labels"].to(self.device)
+
+                    # Forward pass
+                    # NOT: MPS'de bfloat16 autocast, RoPE complex tensor
+                    # işlemleriyle uyumsuz ve nan üretiyor. MPS zaten kendi
+                    # optimizasyonlarını yapıyor, bu yüzden float32 kullanıyoruz.
+                    if self.device == "cuda":
+                        with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            logits, loss, _ = self.model(input_ids, targets=labels)
+                    else:
+                        # MPS ve CPU — float32 (MPS autocast nan üretiyor)
+                        logits, loss, _ = self.model(input_ids, targets=labels)
+
+                    # Ünlü Uyumu Auxiliary Loss
+                    if self.vowel_harmony_loss is not None:
+                        vh_loss = self.vowel_harmony_loss(logits, labels, self.global_step)
+                        loss = loss + vh_loss
+                        accumulation_vh_loss += vh_loss.item() / self.config.grad_accum_steps
+
+                    # NaN/Inf loss kontrolü
+                    if torch.isnan(loss) or torch.isinf(loss):
+                        nan_in_batch = True
+                        break
+
+                    # Gradient accumulation: loss'u böl
+                    loss = loss / self.config.grad_accum_steps
+                    loss.backward()
+                    accumulation_loss += loss.item()
+                    tokens_processed += input_ids.numel()
+
+                # NaN batch kontrolü — gradient step'i atla
+                if nan_in_batch:
+                    self.optimizer.zero_grad()  # Corrupt gradient'ları temizle
+                    self.consecutive_nan_count += 1
+                    lr = self.scheduler.step()  # Scheduler'ı yine ilerlet
+                    self.global_step += 1
+                    print(
+                        f"  ⚠ Step {self.global_step}: NaN loss tespit edildi, "
+                        f"gradient atlanıyor ({self.consecutive_nan_count}/{self.max_consecutive_nan})"
+                    )
+                    if self.consecutive_nan_count >= self.max_consecutive_nan:
+                        print(f"\n❌ Arka arkaya {self.max_consecutive_nan} NaN loss!")
+                        print(f"   Olası sebepler:")
+                        print(f"   - Learning rate çok yüksek (şu anki: {lr:.2e})")
+                        print(f"   - Veri bozuk (pad/unk token oranı çok yüksek)")
+                        print(f"   - Model ağırlıkları patladı")
+                        print(f"   Eğitim durduruluyor.")
+                        break
+                    accumulation_loss = 0.0
+                    accumulation_vh_loss = 0.0
+                    continue
+
+                # Başarılı step — nan sayacını sıfırla
+                self.consecutive_nan_count = 0
+
+                # Gradient clipping
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.config.gradient_clip
+                )
+
+                # NaN gradient kontrolü
+                if isinstance(grad_norm, torch.Tensor) and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
+                    self.optimizer.zero_grad()
+                    lr = self.scheduler.step()
+                    self.global_step += 1
+                    print(f"  ⚠ Step {self.global_step}: NaN gradient norm, step atlanıyor")
+                    accumulation_loss = 0.0
+                    accumulation_vh_loss = 0.0
+                    continue
+
+                # Optimizer step
+                self.optimizer.step()
                 lr = self.scheduler.step()
                 self.global_step += 1
-                print(f"  ⚠ Step {self.global_step}: NaN gradient norm, step atlanıyor")
-                accumulation_loss = 0.0
-                continue
 
-            # Optimizer step
-            self.optimizer.step()
-            lr = self.scheduler.step()
-            self.global_step += 1
+                # Logging (her 10 adımda)
+                if self.global_step % 10 == 0:
+                    elapsed = time.time() - start_time
+                    step_time = time.time() - step_start_time
+                    tokens_per_sec = tokens_processed / elapsed
 
-            # Logging (her 10 adımda)
-            if self.global_step % 10 == 0:
-                elapsed = time.time() - start_time
-                step_time = time.time() - step_start_time
-                tokens_per_sec = tokens_processed / elapsed
+                    print(
+                        f"  Step {self.global_step:>6d}/{self.config.max_steps} | "
+                        f"Loss: {accumulation_loss:.4f} | "
+                        f"LR: {lr:.2e} | "
+                        f"Tok/s: {tokens_per_sec:.0f} | "
+                        f"Elapsed: {elapsed/60:.1f}min"
+                    )
+                    self.train_losses.append((self.global_step, accumulation_loss))
 
-                print(
-                    f"  Step {self.global_step:>6d}/{self.config.max_steps} | "
-                    f"Loss: {accumulation_loss:.4f} | "
-                    f"LR: {lr:.2e} | "
-                    f"Tok/s: {tokens_per_sec:.0f} | "
-                    f"Elapsed: {elapsed/60:.1f}min"
-                )
-                self.train_losses.append((self.global_step, accumulation_loss))
-
-                # TensorBoard logging
-                if self.writer:
-                    self.writer.add_scalar("train/loss", accumulation_loss, self.global_step)
-                    self.writer.add_scalar("train/learning_rate", lr, self.global_step)
-                    self.writer.add_scalar("train/tokens_per_sec", tokens_per_sec, self.global_step)
-                    self.writer.add_scalar("train/grad_norm", grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm, self.global_step)
-                    self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
-
-                step_start_time = time.time()
-                accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla
-            # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
-
-            # Checkpoint kaydet
-            if self.global_step % self.config.save_every == 0:
-                self.save_checkpoint()
-
-                # Eval
-                if self.eval_dataloader:
-                    eval_loss = self.evaluate()
-                    print(f"  📊 Eval Loss: {eval_loss:.4f}")
-
+                    # TensorBoard logging
                     if self.writer:
-                        self.writer.add_scalar("eval/loss", eval_loss, self.global_step)
-                        import math
-                        self.writer.add_scalar("eval/perplexity", math.exp(eval_loss), self.global_step)
+                        self.writer.add_scalar("train/loss", accumulation_loss, self.global_step)
+                        self.writer.add_scalar("train/learning_rate", lr, self.global_step)
+                        self.writer.add_scalar("train/tokens_per_sec", tokens_per_sec, self.global_step)
+                        self.writer.add_scalar("train/grad_norm", grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm, self.global_step)
+                        self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
+                        if self.vowel_harmony_loss is not None:
+                            self.writer.add_scalar("train/vh_loss", accumulation_vh_loss, self.global_step)
 
-                    if eval_loss < self.best_eval_loss:
-                        self.best_eval_loss = eval_loss
-                        self.save_checkpoint(tag="best")
-                        print(f"  🏆 Yeni en iyi model kaydedildi!")
-                    self.model.train()
+                    step_start_time = time.time()
+                    accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla
+                    accumulation_vh_loss = 0.0
+                # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
+
+                # Checkpoint kaydet
+                if self.global_step % self.config.save_every == 0:
+                    self.save_checkpoint()
+
+                    # Eval
+                    if self.eval_dataloader:
+                        eval_loss = self.evaluate()
+                        print(f"  📊 Eval Loss: {eval_loss:.4f}")
+
+                        if self.writer:
+                            self.writer.add_scalar("eval/loss", eval_loss, self.global_step)
+                            import math
+                            self.writer.add_scalar("eval/perplexity", math.exp(eval_loss), self.global_step)
+
+                        if eval_loss < self.best_eval_loss:
+                            self.best_eval_loss = eval_loss
+                            self.save_checkpoint(tag="best")
+                            print(f"  🏆 Yeni en iyi model kaydedildi!")
+                        self.model.train()
+
+        except KeyboardInterrupt:
+            print(f"\n{'='*60}")
+            print(f"🛑 Eğitim kullanıcı tarafından durduruldu (Ctrl+C)")
+            print(f"  Son step: {self.global_step}")
+            print(f"  💾 Son checkpoint kaydediliyor...")
+            self.save_checkpoint()
+            print(f"  ✓ Güvenli çıkış yapıldı.")
+            print(f"  📌 Devam etmek için:")
+            print(f"     --resume checkpoints/toprak_step_{self.global_step}.pt")
+            print(f"{'='*60}")
+            if self.writer:
+                self.writer.close()
+            return
 
         total_time = time.time() - start_time
         print(f"\n{'='*60}")

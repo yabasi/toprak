@@ -60,6 +60,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **Optimizer** | AdamW (weight decay=0.1, betas=0.9/0.95) |
 | **LR Scheduler** | Cosine annealing with linear warmup |
 | **Precision** | MPS: float32 / CUDA: float16 mixed precision |
+| **Türkçe Uyumu** | Ünlü Uyumu Auxiliary Loss (dünyada ilk, opsiyonel) |
 
 ---
 
@@ -106,6 +107,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 - **Weight Tying**: Token embedding ile LM head aynı ağırlıkları paylaşır
 - **Causal Masking**: Dinamik üst üçgen mask ile autoregressive üretim
 - **Gradient Accumulation**: Küçük batch'lerle büyük efektif batch simülasyonu
+- **Ünlü Uyumu Loss**: Türkçe ünlü uyumuna aykırı token tahminlerini cezalandıran auxiliary loss (dünyada ilk)
 
 ---
 
@@ -120,7 +122,8 @@ toprak/
 │   ├── transformer.py            #    ToprakLM (SwiGLU, RMSNorm, Grad Checkpoint)
 │   ├── norms.py                  #    RMSNorm — Modern normalizasyon
 │   ├── rope.py                   #    RoPE — Rotary Position Embedding
-│   └── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
+│   ├── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
+│   └── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
 │
 ├── data/                         # Veri Toplama & İşleme
 │   ├── sources.py                #    Türkçe kaynak URL'leri ve yapılandırma
@@ -365,6 +368,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Bias-free**: Tüm Linear katmanlardan bias kaldırıldı
 - **Weight Tying**: Token embedding ↔ LM head aynı ağırlıklar
 - **Init**: Scaled init — residual projeksiyonlar `1/√(2N)` ile ölçeklendirilmiş
+- **Ünlü Uyumu Loss**: Türkçe büyük ünlü uyumunu auxiliary loss olarak enjekte eder (dünyada ilk)
 
 </details>
 
@@ -405,6 +409,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **TensorBoard**: Loss, LR, tokens/s, grad norm, eval perplexity takibi
 - **Döküman Karıştırma**: Epoch başı döküman seviyesinde shuffle
 - **Dropout**: 0.0 (modern modellerde dropout kullanılmıyor)
+- **Ünlü Uyumu Auxiliary Loss**: Opsiyonel — Türkçe ünlü uyumuna aykırı token tahminlerini cezalandırır (`--vowel-harmony`)
 
 </details>
 

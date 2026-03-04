@@ -89,6 +89,20 @@ def parse_args():
         help="TensorBoard log dizini"
     )
 
+    # Ünlü Uyumu Loss
+    parser.add_argument(
+        "--vowel-harmony", action="store_true",
+        help="Ünlü uyumu auxiliary loss aktifleştir (Türkçe dilbilgisi kaybı)"
+    )
+    parser.add_argument(
+        "--vh-lambda", type=float, default=0.1,
+        help="Ünlü uyumu loss ağırlığı (varsayılan: 0.1)"
+    )
+    parser.add_argument(
+        "--vh-warmup-steps", type=int, default=1000,
+        help="Ünlü uyumu loss warmup adım sayısı (varsayılan: 1000)"
+    )
+
     return parser.parse_args()
 
 
@@ -199,7 +213,19 @@ def main():
     print(f"\n🧠 Model oluşturuldu: {param_count/1e6:.1f}M parametre")
 
     # ─────────────────────────────────────────────
-    # 6. Eğitim
+    # 6. Ünlü Uyumu Loss (opsiyonel)
+    # ─────────────────────────────────────────────
+    vh_loss = None
+    if args.vowel_harmony:
+        from model.vowel_harmony import VowelHarmonyLoss
+        vh_loss = VowelHarmonyLoss(
+            tokenizer=tokenizer,
+            lambda_weight=args.vh_lambda,
+            warmup_steps=args.vh_warmup_steps,
+        )
+
+    # ─────────────────────────────────────────────
+    # 7. Eğitim
     # ─────────────────────────────────────────────
     trainer = ToprakTrainer(
         model=model,
@@ -210,6 +236,7 @@ def main():
         use_compile=not args.no_compile,
         use_gradient_checkpointing=not args.no_grad_checkpoint,
         log_dir=args.log_dir,
+        vowel_harmony_loss=vh_loss,
     )
 
     trainer.train(resume_from=args.resume)
