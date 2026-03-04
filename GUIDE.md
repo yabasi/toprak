@@ -113,6 +113,38 @@ python3 training/train.py --model-size medium \
 | `--vh-lambda` | 0.1 | Loss ağırlığı (0.05–0.3 arası önerilir) |
 | `--vh-warmup-steps` | 1000 | Lambda warmup adım sayısı (ani spike önleme) |
 
+### Morfolojik Ağırlıklı Kayıp ile eğitim
+
+Türkçe'ye özel loss ağırlıklandırması — ek (suffix) tokenlerine daha yüksek cross-entropy ağırlığı vererek modelin Türkçe morfolojisini daha iyi öğrenmesini sağlar. Dünyada bir ilktir. Mevcut eğitime checkpoint'ten devam ederken eklenebilir.
+
+```bash
+# Morfolojik ağırlıklı kayıp aktif
+python3 training/train.py --model-size medium --morph-weight
+
+# Ek ağırlığı ve warmup ayarla
+python3 training/train.py --model-size medium \
+  --morph-weight --morph-suffix-weight 1.3 --morph-warmup-steps 500
+
+# Mevcut eğitime ekleyerek devam et
+python3 training/train.py --model-size medium \
+  --resume checkpoints/toprak_step_21052.pt \
+  --morph-weight --morph-suffix-weight 1.3 --morph-warmup-steps 500
+
+# Ünlü uyumu ile birlikte kullan (her iki dünya ilki birden)
+python3 training/train.py --model-size medium \
+  --resume checkpoints/toprak_step_21052.pt \
+  --morph-weight --morph-suffix-weight 1.3 --morph-warmup-steps 500 \
+  --vowel-harmony --vh-lambda 0.1 --vh-warmup-steps 1000
+```
+
+| Parametre | Varsayılan | Açıklama |
+|---|---|---|
+| `--morph-weight` | Kapalı | Morfolojik ağırlıklı CE loss'u aktifleştir |
+| `--morph-suffix-weight` | 1.3 | Ek token ağırlığı (1.0–2.0 arası önerilir) |
+| `--morph-warmup-steps` | 500 | Ağırlık warmup adım sayısı (ani bozulma önleme) |
+
+> 💡 **Nasıl çalışır?** SentencePiece tokenizer'da `▁` prefix'li tokenler kök, prefix'siz olanlar ek (suffix) olarak kabul edilir. Vocab'daki ~%29 ek token'a daha yüksek ağırlık verilerek model Türkçe ekleme yapısına odaklanır.
+
 ### Optimizasyonları kapatma
 
 ```bash
@@ -186,6 +218,10 @@ Tarayıcıda aç: **http://localhost:6006**
 - **train/learning_rate** — Öğrenme oranı (warmup → cosine decay)
 - **train/tokens_per_sec** — İşleme hızı
 - **train/grad_norm** — Gradient büyüklüğü
+- **train/vh_loss** — Ünlü uyumu auxiliary loss (`--vowel-harmony` aktifse)
+- **train/root_loss** — Kök tokenlerinin CE loss'u (`--morph-weight` aktifse)
+- **train/suffix_loss** — Ek tokenlerinin CE loss'u (`--morph-weight` aktifse)
+- **train/suffix_weight_effective** — Efektif ek ağırlığı (warmup takibi)
 - **eval/loss** — Değerlendirme kaybı
 - **eval/perplexity** — Perplexity (düşük = daha iyi)
 
@@ -322,6 +358,9 @@ python3 upload/push_to_hub.py \
 | `--vowel-harmony` | *(kapalı)* | Ünlü uyumu auxiliary loss aktifleştir |
 | `--vh-lambda` | 0.1 | Ünlü uyumu loss ağırlığı |
 | `--vh-warmup-steps` | 1000 | Ünlü uyumu loss warmup adım sayısı |
+| `--morph-weight` | *(kapalı)* | Morfolojik ağırlıklı CE loss aktifleştir |
+| `--morph-suffix-weight` | 1.3 | Ek token ağırlık çarpanı |
+| `--morph-warmup-steps` | 500 | Morfolojik ağırlık warmup adım sayısı |
 
 ### Modellerin varsayılan parametreleri
 

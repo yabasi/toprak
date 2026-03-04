@@ -55,6 +55,7 @@ class ToprakTrainer:
         use_gradient_checkpointing: bool = True,
         log_dir: str = "logs",
         vowel_harmony_loss=None,
+        morph_weight_loss=None,
     ):
         self.model = model
         self.config = config
@@ -62,6 +63,7 @@ class ToprakTrainer:
         self.eval_dataloader = eval_dataloader
         self.checkpoint_dir = checkpoint_dir
         self.vowel_harmony_loss = vowel_harmony_loss
+        self.morph_weight_loss = morph_weight_loss
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -138,6 +140,13 @@ class ToprakTrainer:
                 self.vowel_harmony_loss.start_step = self.global_step
                 print(f"  ✓ Ünlü uyumu loss warmup: step {self.global_step} → {self.global_step + self.vowel_harmony_loss.warmup_steps}")
 
+        # Morfolojik Ağırlıklı Kayıp — cihaza taşı ve warmup ayarla
+        if self.morph_weight_loss is not None:
+            self.morph_weight_loss.to(self.device)
+            if resume_from:
+                self.morph_weight_loss.start_step = self.global_step
+                print(f"  ✓ Morfolojik ağırlık warmup: step {self.global_step} → {self.global_step + self.morph_weight_loss.warmup_steps}")
+
         print(f"\n{'='*60}")
         print(f"🌱 Toprak Eğitimi Başlıyor")
         print(f"{'='*60}")
@@ -153,6 +162,7 @@ class ToprakTrainer:
         print(f"  Grad Checkpoint:     {'✅' if hasattr(self.model, 'gradient_checkpointing') and self.model.gradient_checkpointing else '❌'}")
         print(f"  TensorBoard:         {'✅' if self.writer else '❌'}")
         print(f"  Ünlü Uyumu Loss:     {'✅ (λ=' + str(self.vowel_harmony_loss.lambda_weight) + ')' if self.vowel_harmony_loss else '❌'}")
+        print(f"  Morph Ağırlık:       {'✅ (w=' + str(self.morph_weight_loss.suffix_weight) + ')' if self.morph_weight_loss else '❌'}")
         if self.writer:
             print(f"")
             print(f"  📊 Eğitim loglarını takip etmek için yeni bir terminalde:")
@@ -189,12 +199,22 @@ class ToprakTrainer:
                     # NOT: MPS'de bfloat16 autocast, RoPE complex tensor
                     # işlemleriyle uyumsuz ve nan üretiyor. MPS zaten kendi
                     # optimizasyonlarını yapıyor, bu yüzden float32 kullanıyoruz.
-                    if self.device == "cuda":
-                        with torch.autocast(device_type="cuda", dtype=torch.float16):
-                            logits, loss, _ = self.model(input_ids, targets=labels)
+                    if self.morph_weight_loss is not None:
+                        # Morfolojik ağırlıklı kayıp — CE loss'u ayrı hesapla
+                        if self.device == "cuda":
+                            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                                logits, _, _ = self.model(input_ids)
+                                loss = self.morph_weight_loss(logits, labels, self.global_step)
+                        else:
+                            logits, _, _ = self.model(input_ids)
+                            loss = self.morph_weight_loss(logits, labels, self.global_step)
                     else:
-                        # MPS ve CPU — float32 (MPS autocast nan üretiyor)
-                        logits, loss, _ = self.model(input_ids, targets=labels)
+                        if self.device == "cuda":
+                            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                                logits, loss, _ = self.model(input_ids, targets=labels)
+                        else:
+                            # MPS ve CPU — float32 (MPS autocast nan üretiyor)
+                            logits, loss, _ = self.model(input_ids, targets=labels)
 
                     # Ünlü Uyumu Auxiliary Loss
                     if self.vowel_harmony_loss is not None:
@@ -282,6 +302,10 @@ class ToprakTrainer:
                         self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
                         if self.vowel_harmony_loss is not None:
                             self.writer.add_scalar("train/vh_loss", accumulation_vh_loss, self.global_step)
+                        if self.morph_weight_loss is not None:
+                            self.writer.add_scalar("train/root_loss", self.morph_weight_loss._last_root_loss, self.global_step)
+                            self.writer.add_scalar("train/suffix_loss", self.morph_weight_loss._last_suffix_loss, self.global_step)
+                            self.writer.add_scalar("train/suffix_weight_effective", self.morph_weight_loss._effective_weight, self.global_step)
 
                     step_start_time = time.time()
                     accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla

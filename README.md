@@ -61,6 +61,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **LR Scheduler** | Cosine annealing with linear warmup |
 | **Precision** | MPS: float32 / CUDA: float16 mixed precision |
 | **Türkçe Uyumu** | Ünlü Uyumu Auxiliary Loss (dünyada ilk, opsiyonel) |
+| **Morfolojik Kayıp** | Ek tokenlerine ağırlıklı CE Loss (dünyada ilk, opsiyonel) |
 
 ---
 
@@ -108,6 +109,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 - **Causal Masking**: Dinamik üst üçgen mask ile autoregressive üretim
 - **Gradient Accumulation**: Küçük batch'lerle büyük efektif batch simülasyonu
 - **Ünlü Uyumu Loss**: Türkçe ünlü uyumuna aykırı token tahminlerini cezalandıran auxiliary loss (dünyada ilk)
+- **Morfolojik Ağırlıklı Kayıp**: Ek (suffix) tokenlerine daha yüksek CE loss ağırlığı vererek morfoloji öğrenimini güçlendirir (dünyada ilk)
 
 ---
 
@@ -123,7 +125,8 @@ toprak/
 │   ├── norms.py                  #    RMSNorm — Modern normalizasyon
 │   ├── rope.py                   #    RoPE — Rotary Position Embedding
 │   ├── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
-│   └── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
+│   ├── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
+│   └── morph_weighting.py        #    Morfolojik Ağırlıklı CE Loss (dünyada ilk)
 │
 ├── data/                         # Veri Toplama & İşleme
 │   ├── sources.py                #    Türkçe kaynak URL'leri ve yapılandırma
@@ -369,6 +372,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Weight Tying**: Token embedding ↔ LM head aynı ağırlıklar
 - **Init**: Scaled init — residual projeksiyonlar `1/√(2N)` ile ölçeklendirilmiş
 - **Ünlü Uyumu Loss**: Türkçe büyük ünlü uyumunu auxiliary loss olarak enjekte eder (dünyada ilk)
+- **Morfolojik Ağırlıklı Kayıp**: Ek tokenlerine yüksek ağırlık → morfoloji farkındalığı (dünyada ilk)
 
 </details>
 
@@ -410,6 +414,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Döküman Karıştırma**: Epoch başı döküman seviyesinde shuffle
 - **Dropout**: 0.0 (modern modellerde dropout kullanılmıyor)
 - **Ünlü Uyumu Auxiliary Loss**: Opsiyonel — Türkçe ünlü uyumuna aykırı token tahminlerini cezalandırır (`--vowel-harmony`)
+- **Morfolojik Ağırlıklı Kayıp**: Opsiyonel — Ek tokenlerine yüksek CE ağırlığı, kök/ek loss ayrı takip (`--morph-weight`)
 
 </details>
 

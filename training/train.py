@@ -103,6 +103,20 @@ def parse_args():
         help="Ünlü uyumu loss warmup adım sayısı (varsayılan: 1000)"
     )
 
+    # Morfolojik Ağırlıklı Kayıp
+    parser.add_argument(
+        "--morph-weight", action="store_true",
+        help="Morfolojik ağırlıklı kayıp fonksiyonunu aktifleştir (ek tokenlerine yüksek ağırlık)"
+    )
+    parser.add_argument(
+        "--morph-suffix-weight", type=float, default=1.3,
+        help="Ek token'ları için kayıp ağırlığı (varsayılan: 1.3)"
+    )
+    parser.add_argument(
+        "--morph-warmup-steps", type=int, default=500,
+        help="Morfolojik ağırlık warmup adım sayısı (varsayılan: 500)"
+    )
+
     return parser.parse_args()
 
 
@@ -225,6 +239,18 @@ def main():
         )
 
     # ─────────────────────────────────────────────
+    # 6b. Morfolojik Ağırlıklı Kayıp (opsiyonel)
+    # ─────────────────────────────────────────────
+    morph_loss = None
+    if args.morph_weight:
+        from model.morph_weighting import MorphWeightedCELoss
+        morph_loss = MorphWeightedCELoss(
+            tokenizer=tokenizer,
+            suffix_weight=args.morph_suffix_weight,
+            warmup_steps=args.morph_warmup_steps,
+        )
+
+    # ─────────────────────────────────────────────
     # 7. Eğitim
     # ─────────────────────────────────────────────
     trainer = ToprakTrainer(
@@ -237,6 +263,7 @@ def main():
         use_gradient_checkpointing=not args.no_grad_checkpoint,
         log_dir=args.log_dir,
         vowel_harmony_loss=vh_loss,
+        morph_weight_loss=morph_loss,
     )
 
     trainer.train(resume_from=args.resume)
