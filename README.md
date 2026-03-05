@@ -342,6 +342,8 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 
 Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
+> 📖 **Detaylı katkı rehberi için:** [CONTRIBUTING.md](CONTRIBUTING.md)
+
 1. Bu repoyu **fork**'layın
 2. Feature branch oluşturun (`git checkout -b feature/yeni-ozellik`)
 3. Değişikliklerinizi commit edin (`git commit -m 'Yeni özellik eklendi'`)
@@ -446,6 +448,25 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
 ---
 
+## Geliştirici
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/yabasi">
+        <img src="https://github.com/yabasi.png" width="100px;" alt="Abbas Kandemir"/><br />
+        <sub><b>Abbas Kandemir</b></sub>
+      </a><br />
+      <sub>Proje Kurucusu & Ana Geliştirici</sub><br />
+      <a href="https://github.com/yabasi">@yabasi</a>
+    </td>
+  </tr>
+</table>
+
+> Katkıda bulunmak ister misiniz? Pull request'lerinizi bekliyoruz! Detaylar için [CONTRIBUTING.md](CONTRIBUTING.md) rehberine bakın.
+
+---
+
 ## Lisans
 
 Bu proje [MIT Lisansı](LICENSE) altında yayınlanmıştır. Herkes özgürce kullanabilir, değiştirebilir ve dağıtabilir.
@@ -458,5 +479,5 @@ Bu proje [MIT Lisansı](LICENSE) altında yayınlanmıştır. Herkes özgürce k
 </p>
 
 <p align="center">
-  <sub>Made with ❤️ in Türkiye</sub>
+  <sub>Made with ❤️ by <a href="https://github.com/yabasi">Abbas Kandemir</a> in Türkiye</sub>
 </p>
