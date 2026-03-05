@@ -115,3 +115,9 @@ secrets.json
 #  Proje Kılavuzu (Kişisel Doküman)
 # ─────────────────────────────────────────────────────
 TurkishLLM_Proje_Kilavuzu.docx
+
+# ─────────────────────────────────────────────────────
+#  Tokenizer Model Dosyaları
+# ─────────────────────────────────────────────────────
+toprak_tokenizer.model
+toprak_tokenizer.vocab

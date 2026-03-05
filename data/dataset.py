@@ -87,9 +87,14 @@ class ToprakDataset(Dataset):
 
         # 3. Tokenize et ve birleştir
         all_tokens = []
-        for text in documents:
+        total_docs = len(documents)
+        for i, text in enumerate(documents, 1):
+            if i % 100 == 0 or i == total_docs:
+                print(f"  Tokenize ediliyor: {i}/{total_docs}", end="\r")
+
             tokens = self.tokenizer.encode(text, add_bos=True, add_eos=True)
             all_tokens.extend(tokens)
+        print()
 
         return all_tokens
 
