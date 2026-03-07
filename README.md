@@ -465,6 +465,25 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
 > Katkıda bulunmak ister misiniz? Pull request'lerinizi bekliyoruz! Detaylar için [CONTRIBUTING.md](CONTRIBUTING.md) rehberine bakın.
 
+### 🤝 Katkıda Bulunanlar
+
+Toprak'a katkıda bulunan herkese teşekkür ederiz! 🙏
+
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/ismailocal">
+        <img src="https://github.com/ismailocal.png" width="80px;" alt="İsmail Öcal"/><br />
+        <sub><b>İsmail Öcal</b></sub>
+      </a><br />
+      <sub>🐛 Bug Fix</sub>
+    </td>
+    <!-- Yeni katkıda bulunanlar buraya eklenecek -->
+  </tr>
+</table>
+
+> 💡 **Sen de bu listeye girebilirsin!** Her kabul edilen PR ile katkıda bulunanlar listesine ekliyoruz. [Nasıl katkıda bulunabileceğini öğren →](CONTRIBUTING.md)
+
 ---
 
 ## Lisans
