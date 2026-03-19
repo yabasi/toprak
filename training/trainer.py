@@ -357,6 +357,10 @@ class ToprakTrainer:
         print(f"  En iyi eval loss: {self.best_eval_loss:.4f}")
         print(f"{'='*60}")
 
+        # Her durumda son modeli ayrı bir checkpoint olarak kaydet
+        # (ör. kısa eğitimlerde eval hiç çalışmasa bile inference için hazır olsun)
+        self.save_checkpoint(tag="last")
+
         if self.writer:
             self.writer.close()
 
