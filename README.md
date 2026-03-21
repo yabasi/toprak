@@ -203,7 +203,7 @@ python3 scripts/prepare_data.py
 # Sadece Wikipedia indir
 python3 scripts/prepare_data.py --step download
 
-# Hızlı test (örnek veri ile)
+# Hızlı test (örnek veri ile — vocab_size otomatik olarak 3000'e düşürülür)
 python3 scripts/prepare_data.py --use-sample --sample-count 5000
 
 # Sadece tokenizer eğit
@@ -262,9 +262,15 @@ python3 inference/chat.py \
 ### 4️⃣ Metin Üretimi
 
 ```bash
+# Varsayılan checkpoint ile (checkpoints/toprak_last.pt)
+python3 inference/generate.py \
+  --prompt "Yapay zekanın geleceği" \
+  --temperature 0.8 \
+  --num-samples 3
+
+# En iyi model ile
 python3 inference/generate.py \
   --checkpoint checkpoints/toprak_best.pt \
-  --tokenizer toprak_tokenizer.model \
   --prompt "Yapay zekanın geleceği" \
   --temperature 0.8 \
   --num-samples 3
@@ -312,7 +318,7 @@ python3 data/crawler.py --source haber --max-pages 1000
 python3 data/cleaner.py --input data_cache --output data_cache/clean
 
 # 3. Son checkpoint'ten eğitime devam et
-python3 training/train.py --resume checkpoints/toprak_best.pt \
+python3 training/train.py --resume checkpoints/toprak_last.pt \
   --data-dir data_cache/clean/train
 
 # 4. Değerlendir

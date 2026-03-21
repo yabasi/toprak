@@ -48,6 +48,7 @@ Eğitimden önce veriyi indirip temizlemen gerekiyor.
 python3 scripts/prepare_data.py
 
 # Sadece test amaçlı küçük bir örnek veri ile
+# Not: --use-sample modunda vocab_size otomatik olarak 3000'e düşürülür
 python3 scripts/prepare_data.py --use-sample
 ```
 
@@ -188,7 +189,21 @@ python3 training/train.py \
   --model-size small \
   --resume checkpoints/toprak_best.pt \
   --max-steps 200000
+
+# Son kaydedilen modelden devam et
+python3 training/train.py \
+  --model-size small \
+  --resume checkpoints/toprak_last.pt \
+  --max-steps 200000
 ```
+
+### Checkpoint Türleri
+
+| Dosya | Açıklama |
+|---|---|
+| `toprak_step_XXXX.pt` | Her 5000 adımda otomatik kaydedilir (son 3 tutulur) |
+| `toprak_best.pt` | En düşük eval loss'a sahip model |
+| `toprak_last.pt` | Eğitim tamamlandığında her zaman kaydedilir |
 
 ### Mevcut checkpoint'leri görmek için
 
@@ -232,7 +247,11 @@ Tarayıcıda aç: **http://localhost:6006**
 Eğitilmiş modelle metin üret.
 
 ```bash
-# Temel kullanım
+# Temel kullanım (varsayılan checkpoint: checkpoints/toprak_last.pt)
+python3 inference/generate.py \
+  --prompt "Türkiye'nin başkenti"
+
+# En iyi model ile
 python3 inference/generate.py \
   --checkpoint checkpoints/toprak_best.pt \
   --prompt "Türkiye'nin başkenti"
@@ -253,6 +272,7 @@ python3 inference/generate.py \
 
 | Parametre | Varsayılan | Açıklama |
 |---|---|---|
+| `--checkpoint` | `checkpoints/toprak_last.pt` | Model checkpoint dosyası |
 | `--temperature` | 0.8 | Yaratıcılık. 0.1 = tutarlı, 1.5 = yaratıcı/kaotik |
 | `--top-k` | 50 | Her adımda en olası K token arasından seç |
 | `--top-p` | 0.9 | Kümülatif olasılık eşiği (nucleus sampling) |
@@ -451,6 +471,7 @@ ls checkpoints/
 
 # Henüz eğitim yapılmadıysa, önce eğitin:
 python3 training/train.py --model-size small --max-steps 1000
+# Eğitim tamamlandığında checkpoints/toprak_last.pt otomatik kaydedilir
 ```
 
 ### ❌ "MPS kullanılamıyor"
@@ -496,12 +517,14 @@ pip install tensorboard "setuptools<82"
 
 4. Tam eğitim (small, 100K adım)
    └── python3 training/train.py --model-size small
+       (tamamlandığında toprak_last.pt otomatik kaydedilir)
 
 5. Değerlendirme
    └── python3 evaluation/eval.py --checkpoint checkpoints/toprak_best.pt --eval-data data_cache/clean/eval
 
 6. Metin üretimi ile test et
-   └── python3 inference/generate.py --checkpoint checkpoints/toprak_best.pt --prompt "test"
+   └── python3 inference/generate.py --prompt "test"
+       (varsayılan: toprak_last.pt, en iyi model için: --checkpoint checkpoints/toprak_best.pt)
 
 7. Memnunsan → Büyük modele geç (RTX 4090 ile)
    └── python3 training/train.py --model-size large

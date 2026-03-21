@@ -79,13 +79,14 @@ pip install -r requirements.txt
 
 ```bash
 # Veri hazırlama (küçük örnek veri ile)
+# Not: --use-sample modunda vocab_size otomatik olarak 3000'e düşürülür
 python3 scripts/prepare_data.py --use-sample
 
 # Kısa eğitim testi
 python3 training/train.py --model-size small --max-steps 100
 
-# Metin üretimi testi
-python3 inference/generate.py --checkpoint checkpoints/toprak_best.pt --prompt "Türkiye"
+# Metin üretimi testi (varsayılan: checkpoints/toprak_last.pt)
+python3 inference/generate.py --prompt "Türkiye"
 ```
 
 Her şey hatasız çalışıyorsa geliştirmeye hazırsınız!
