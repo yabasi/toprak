@@ -478,6 +478,13 @@ Toprak'a katkıda bulunan herkese teşekkür ederiz! 🙏
       </a><br />
       <sub>🐛 Bug Fix</sub>
     </td>
+    <td align="center">
+      <a href="https://github.com/byerlikaya">
+        <img src="https://github.com/byerlikaya.png" width="80px;" alt="Barış Yerlikaya"/><br />
+        <sub><b>Barış Yerlikaya</b></sub>
+      </a><br />
+      <sub>🐛 Bug Fix · 🔧 Tokenizer · 📦 Pipeline</sub>
+    </td>
     <!-- Yeni katkıda bulunanlar buraya eklenecek -->
   </tr>
 </table>
