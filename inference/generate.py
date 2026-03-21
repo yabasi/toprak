@@ -140,8 +140,16 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="🌱 Toprak — Metin Üretimi")
-    parser.add_argument("--checkpoint", type=str, required=True,
-                        help="Model checkpoint dosyası")
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default="checkpoints/toprak_last.pt",
+        help=(
+            "Model checkpoint dosyası "
+            "(varsayılan: checkpoints/toprak_last.pt; "
+            "eval ile en iyi modeli kaydettiyseniz checkpoints/toprak_best.pt kullanın)"
+        ),
+    )
     parser.add_argument("--tokenizer", type=str, default="toprak_tokenizer.model",
                         help="Tokenizer model dosyası")
     parser.add_argument("--prompt", type=str, default="Türkiye'nin başkenti",

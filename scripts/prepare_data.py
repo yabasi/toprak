@@ -366,10 +366,23 @@ def run_full_pipeline(args):
                 print("   Önce 'download' adımını çalıştırın.")
                 return
 
+        # Örnek veri ile çalışırken çok büyük vocab boyutları SentencePiece tarafından
+        # desteklenmeyebilir; bu nedenle üst sınırı dinamik olarak küçültüyoruz.
+        effective_vocab_size = args.vocab_size
+        if args.use_sample:
+            # Sample veri için güvenli bir üst sınır (SentencePiece hata mesajına göre < 3248)
+            max_sample_vocab_size = 3000
+            if effective_vocab_size > max_sample_vocab_size:
+                print(
+                    f"\n⚠️  --use-sample ile çalışırken vocab_size={effective_vocab_size:,} "
+                    f"çok büyük. {max_sample_vocab_size:,} olarak sınırlandırılıyor."
+                )
+                effective_vocab_size = max_sample_vocab_size
+
         train_tokenizer_from_data(
             data_file,
             model_prefix=args.tokenizer_prefix,
-            vocab_size=args.vocab_size,
+            vocab_size=effective_vocab_size,
         )
 
     # Adım 3: Eğitim verisi hazırlama
