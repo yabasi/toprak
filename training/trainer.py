@@ -59,6 +59,7 @@ class ToprakTrainer:
         log_dir: str = "logs",
         vowel_harmony_loss=None,
         morph_weight_loss=None,
+        consonant_harmony_loss=None,
     ):
         self.model = model
         self.config = config
@@ -67,6 +68,7 @@ class ToprakTrainer:
         self.checkpoint_dir = checkpoint_dir
         self.vowel_harmony_loss = vowel_harmony_loss
         self.morph_weight_loss = morph_weight_loss
+        self.consonant_harmony_loss = consonant_harmony_loss
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -150,6 +152,13 @@ class ToprakTrainer:
                 self.morph_weight_loss.start_step = self.global_step
                 print(f"  ✓ Morfolojik ağırlık warmup: step {self.global_step} → {self.global_step + self.morph_weight_loss.warmup_steps}")
 
+        # Ünsüz Benzeşmesi Loss — cihaza taşı ve warmup ayarla
+        if self.consonant_harmony_loss is not None:
+            self.consonant_harmony_loss.to(self.device)
+            if resume_from:
+                self.consonant_harmony_loss.start_step = self.global_step
+                print(f"  ✓ Ünsüz benzeşmesi loss warmup: step {self.global_step} → {self.global_step + self.consonant_harmony_loss.warmup_steps}")
+
         print(f"\n{'='*60}")
         print(f"🌱 Toprak Eğitimi Başlıyor")
         print(f"{'='*60}")
@@ -166,6 +175,7 @@ class ToprakTrainer:
         print(f"  TensorBoard:         {'✅' if self.writer else '❌'}")
         print(f"  Ünlü Uyumu Loss:     {'✅ (λ=' + str(self.vowel_harmony_loss.lambda_weight) + ')' if self.vowel_harmony_loss else '❌'}")
         print(f"  Morph Ağırlık:       {'✅ (w=' + str(self.morph_weight_loss.suffix_weight) + ')' if self.morph_weight_loss else '❌'}")
+        print(f"  Ünsüz Benzeşmesi:    {'✅ (λ=' + str(self.consonant_harmony_loss.lambda_weight) + ')' if self.consonant_harmony_loss else '❌'}")
         if self.writer:
             print(f"")
             print(f"  📊 Eğitim loglarını takip etmek için yeni bir terminalde:")
@@ -175,6 +185,7 @@ class ToprakTrainer:
 
         accumulation_loss = 0.0
         accumulation_vh_loss = 0.0
+        accumulation_ch_loss = 0.0
         start_time = time.time()
         step_start_time = time.time()
         tokens_processed = 0
@@ -225,6 +236,12 @@ class ToprakTrainer:
                         loss = loss + vh_loss
                         accumulation_vh_loss += vh_loss.item() / self.config.grad_accum_steps
 
+                    # Ünsüz Benzeşmesi Auxiliary Loss
+                    if self.consonant_harmony_loss is not None:
+                        ch_loss = self.consonant_harmony_loss(logits, labels, self.global_step)
+                        loss = loss + ch_loss
+                        accumulation_ch_loss += ch_loss.item() / self.config.grad_accum_steps
+
                     # NaN/Inf loss kontrolü
                     if torch.isnan(loss) or torch.isinf(loss):
                         nan_in_batch = True
@@ -256,6 +273,7 @@ class ToprakTrainer:
                         break
                     accumulation_loss = 0.0
                     accumulation_vh_loss = 0.0
+                    accumulation_ch_loss = 0.0
                     continue
 
                 # Başarılı step — nan sayacını sıfırla
@@ -274,6 +292,7 @@ class ToprakTrainer:
                     print(f"  ⚠ Step {self.global_step}: NaN gradient norm, step atlanıyor")
                     accumulation_loss = 0.0
                     accumulation_vh_loss = 0.0
+                    accumulation_ch_loss = 0.0
                     continue
 
                 # Optimizer step
@@ -287,24 +306,30 @@ class ToprakTrainer:
                     step_time = time.time() - step_start_time
                     tokens_per_sec = tokens_processed / elapsed
 
+                    avg_loss = accumulation_loss / 10.0
+                    avg_vh_loss = accumulation_vh_loss / 10.0
+                    avg_ch_loss = accumulation_ch_loss / 10.0
+
                     print(
                         f"  Step {self.global_step:>6d}/{self.config.max_steps} | "
-                        f"Loss: {accumulation_loss:.4f} | "
+                        f"Loss: {avg_loss:.4f} | "
                         f"LR: {lr:.2e} | "
                         f"Tok/s: {tokens_per_sec:.0f} | "
                         f"Elapsed: {elapsed/60:.1f}min"
                     )
-                    self.train_losses.append((self.global_step, accumulation_loss))
+                    self.train_losses.append((self.global_step, avg_loss))
 
                     # TensorBoard logging
                     if self.writer:
-                        self.writer.add_scalar("train/loss", accumulation_loss, self.global_step)
+                        self.writer.add_scalar("train/loss", avg_loss, self.global_step)
                         self.writer.add_scalar("train/learning_rate", lr, self.global_step)
                         self.writer.add_scalar("train/tokens_per_sec", tokens_per_sec, self.global_step)
                         self.writer.add_scalar("train/grad_norm", grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm, self.global_step)
                         self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
                         if self.vowel_harmony_loss is not None:
-                            self.writer.add_scalar("train/vh_loss", accumulation_vh_loss, self.global_step)
+                            self.writer.add_scalar("train/vh_loss", avg_vh_loss, self.global_step)
+                        if self.consonant_harmony_loss is not None:
+                            self.writer.add_scalar("train/ch_loss", avg_ch_loss, self.global_step)
                         if self.morph_weight_loss is not None:
                             self.writer.add_scalar("train/root_loss", self.morph_weight_loss._last_root_loss, self.global_step)
                             self.writer.add_scalar("train/suffix_loss", self.morph_weight_loss._last_suffix_loss, self.global_step)
@@ -313,6 +338,7 @@ class ToprakTrainer:
                     step_start_time = time.time()
                     accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla
                     accumulation_vh_loss = 0.0
+                    accumulation_ch_loss = 0.0
                 # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
 
                 # Checkpoint kaydet

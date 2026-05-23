@@ -66,12 +66,11 @@ def generate_text(
 
             # No-repeat ngram engelle
             if no_repeat_ngram_size > 0 and len(generated) >= no_repeat_ngram_size:
-                for ngram_size in range(1, no_repeat_ngram_size + 1):
-                    ngram = tuple(generated[-(ngram_size-1):]) if ngram_size > 1 else ()
-                    for i in range(len(generated) - ngram_size + 1):
-                        if tuple(generated[i:i+ngram_size-1]) == ngram:
-                            banned_token = generated[i + ngram_size - 1]
-                            logits[0, banned_token] = float('-inf')
+                ngram_prefix = tuple(generated[-(no_repeat_ngram_size - 1):])
+                for i in range(len(generated) - no_repeat_ngram_size + 1):
+                    if tuple(generated[i : i + no_repeat_ngram_size - 1]) == ngram_prefix:
+                        banned_token = generated[i + no_repeat_ngram_size - 1]
+                        logits[0, banned_token] = float('-inf')
 
             # Temperature
             logits = logits / max(temperature, 1e-8)

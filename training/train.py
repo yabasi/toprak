@@ -120,6 +120,20 @@ def parse_args():
         help="Morfolojik ağırlık warmup adım sayısı (varsayılan: 500)"
     )
 
+    # Ünsüz Benzeşmesi Loss
+    parser.add_argument(
+        "--consonant-harmony", action="store_true",
+        help="Ünsüz benzeşmesi auxiliary loss aktifleştir (Türkçe dilbilgisi kaybı)"
+    )
+    parser.add_argument(
+        "--ch-lambda", type=float, default=0.1,
+        help="Ünsüz benzeşmesi loss ağırlığı (varsayılan: 0.1)"
+    )
+    parser.add_argument(
+        "--ch-warmup-steps", type=int, default=1000,
+        help="Ünsüz benzeşmesi loss warmup adım sayısı (varsayılan: 1000)"
+    )
+
     return parser.parse_args()
 
 
@@ -254,6 +268,18 @@ def main():
         )
 
     # ─────────────────────────────────────────────
+    # 6c. Ünsüz Benzeşmesi Loss (opsiyonel)
+    # ─────────────────────────────────────────────
+    ch_loss = None
+    if args.consonant_harmony:
+        from model.consonant_harmony import ConsonantHarmonyLoss
+        ch_loss = ConsonantHarmonyLoss(
+            tokenizer=tokenizer,
+            lambda_weight=args.ch_lambda,
+            warmup_steps=args.ch_warmup_steps,
+        )
+
+    # ─────────────────────────────────────────────
     # 7. Eğitim
     # ─────────────────────────────────────────────
     trainer = ToprakTrainer(
@@ -267,6 +293,7 @@ def main():
         log_dir=args.log_dir,
         vowel_harmony_loss=vh_loss,
         morph_weight_loss=morph_loss,
+        consonant_harmony_loss=ch_loss,
     )
 
     trainer.train(resume_from=args.resume)
