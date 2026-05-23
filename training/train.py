@@ -144,6 +144,24 @@ def parse_args():
         help="Morfolojik başlık loss ağırlığı (varsayılan: 0.2)"
     )
 
+    # Hece ve Kafiye Kaybı (Syllable & Rhyme Loss)
+    parser.add_argument(
+        "--syllable-rhyme", action="store_true",
+        help="Hece ve kafiye auxiliary loss aktifleştir (Türkçe şiirsel kısıtlar)"
+    )
+    parser.add_argument(
+        "--sr-lambda-syllable", type=float, default=0.1,
+        help="Hece ölçüsü loss ağırlığı (varsayılan: 0.1)"
+    )
+    parser.add_argument(
+        "--sr-lambda-rhyme", type=float, default=0.1,
+        help="Kafiye loss ağırlığı (varsayılan: 0.1)"
+    )
+    parser.add_argument(
+        "--sr-warmup-steps", type=int, default=1000,
+        help="Hece ve kafiye loss warmup adım sayısı (varsayılan: 1000)"
+    )
+
     return parser.parse_args()
 
 
@@ -294,6 +312,17 @@ def main():
             warmup_steps=args.ch_warmup_steps,
         )
 
+    # ─── 6d. Hece ve Kafiye Loss (opsiyonel) ───
+    sr_loss = None
+    if args.syllable_rhyme:
+        from model.syllable_rhyme import SyllableRhymeLoss
+        sr_loss = SyllableRhymeLoss(
+            tokenizer=tokenizer,
+            lambda_syllable=args.sr_lambda_syllable,
+            lambda_rhyme=args.sr_lambda_rhyme,
+            warmup_steps=args.sr_warmup_steps,
+        )
+
     # ─────────────────────────────────────────────
     # 7. Eğitim
     # ─────────────────────────────────────────────
@@ -309,6 +338,7 @@ def main():
         vowel_harmony_loss=vh_loss,
         morph_weight_loss=morph_loss,
         consonant_harmony_loss=ch_loss,
+        syllable_rhyme_loss=sr_loss,
     )
 
     trainer.train(resume_from=args.resume)

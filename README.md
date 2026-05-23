@@ -64,6 +64,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **Ünsüz Benzeşmesi** | Ünsüz Benzeşmesi Auxiliary Loss (dünyada ilk, opsiyonel) |
 | **Morfolojik Kayıp** | Ek tokenlerine ağırlıklı CE Loss (dünyada ilk, opsiyonel) |
 | **Morfolojik Başlık** | Kök, Ek ve Özel Çoklu Görev (Multi-task) Sınıflandırma Başlığı (dünyada ilk, opsiyonel) |
+| **Hece & Kafiye** | Türkçe Hece Ölçüsü ve Kafiye Uyumu Auxiliary Loss (dünyada ilk, opsiyonel) |
 
 ---
 
@@ -114,6 +115,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 - **Ünsüz Benzeşmesi Loss**: Sert ünsüzle biten kelimelerden sonra yumuşak ünsüzle başlayan ek tahminlerini cezalandıran auxiliary loss (dünyada ilk)
 - **Morfolojik Ağırlıklı Kayıp**: Ek (suffix) tokenlerine daha yüksek CE loss ağırlığı vererek morfoloji öğrenimini güçlendirir (dünyada ilk)
 - **Morfolojik Sınır & Sentaks Başlığı (POS Head)**: Tokenları Kök, Ek ve Özel olarak 3 sınıfa ayıran çoklu görev (multi-task) yardımcı başlığı (dünyada ilk)
+- **Hece & Kafiye Loss**: Türkçe hece ölçüsü (hece vezni) ve kafiye (uyak) kurallarını eğitimde dinamik kısıt olarak öğreten auxiliary loss (dünyada ilk)
 
 ---
 
@@ -131,7 +133,8 @@ toprak/
 │   ├── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
 │   ├── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
 │   ├── consonant_harmony.py      #    Ünsüz Benzeşmesi Auxiliary Loss (Türkçe'ye özel)
-│   └── morph_weighting.py        #    Morfolojik Ağırlıklı CE Loss (dünyada ilk)
+│   ├── morph_weighting.py        #    Morfolojik Ağırlıklı CE Loss (dünyada ilk)
+│   └── syllable_rhyme.py         #    Hece ve Kafiye Auxiliary Loss (dünyada ilk)
 │
 ├── data/                         # Veri Toplama & İşleme
 │   ├── sources.py                #    Türkçe kaynak URL'leri ve yapılandırma
@@ -392,6 +395,7 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Ünsüz Benzeşmesi Loss**: Sert ünsüz sonrası yumuşak ünsüzlü ek tahminlerini cezalandırır (dünyada ilk)
 - **Morfolojik Ağırlıklı Kayıp**: Ek tokenlerine yüksek ağırlık → morfoloji farkındalığı (dünyada ilk)
 - **Morfolojik Sınır & Sentaks Başlığı**: Kök, ek ve özel token çoklu görev sınıflandırması (dünyada ilk)
+- **Hece ve Kafiye Kaybı**: Dinamik hece ölçüsü (hece vezni) taşma ve satır sonu kontrolleri ile son-2 ses uyumu kafiye kısıtlamalarını eğitir (dünyada ilk)
 
 </details>
 

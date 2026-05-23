@@ -60,6 +60,7 @@ class ToprakTrainer:
         vowel_harmony_loss=None,
         morph_weight_loss=None,
         consonant_harmony_loss=None,
+        syllable_rhyme_loss=None,
     ):
         self.model = model
         self.config = config
@@ -69,6 +70,7 @@ class ToprakTrainer:
         self.vowel_harmony_loss = vowel_harmony_loss
         self.morph_weight_loss = morph_weight_loss
         self.consonant_harmony_loss = consonant_harmony_loss
+        self.syllable_rhyme_loss = syllable_rhyme_loss
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -159,6 +161,13 @@ class ToprakTrainer:
                 self.consonant_harmony_loss.start_step = self.global_step
                 print(f"  ✓ Ünsüz benzeşmesi loss warmup: step {self.global_step} → {self.global_step + self.consonant_harmony_loss.warmup_steps}")
 
+        # Hece ve Kafiye Loss — cihaza taşı ve warmup ayarla
+        if self.syllable_rhyme_loss is not None:
+            self.syllable_rhyme_loss.to(self.device)
+            if resume_from:
+                self.syllable_rhyme_loss.start_step = self.global_step
+                print(f"  ✓ Hece ve kafiye loss warmup: step {self.global_step} → {self.global_step + self.syllable_rhyme_loss.warmup_steps}")
+
         print(f"\n{'='*60}")
         print(f"🌱 Toprak Eğitimi Başlıyor")
         print(f"{'='*60}")
@@ -176,6 +185,7 @@ class ToprakTrainer:
         print(f"  Ünlü Uyumu Loss:     {'✅ (λ=' + str(self.vowel_harmony_loss.lambda_weight) + ')' if self.vowel_harmony_loss else '❌'}")
         print(f"  Morph Ağırlık:       {'✅ (w=' + str(self.morph_weight_loss.suffix_weight) + ')' if self.morph_weight_loss else '❌'}")
         print(f"  Ünsüz Benzeşmesi:    {'✅ (λ=' + str(self.consonant_harmony_loss.lambda_weight) + ')' if self.consonant_harmony_loss else '❌'}")
+        print(f"  Hece & Kafiye Loss:  {'✅ (λ_hece=' + str(self.syllable_rhyme_loss.lambda_syllable) + ', λ_kaf=' + str(self.syllable_rhyme_loss.lambda_rhyme) + ')' if self.syllable_rhyme_loss else '❌'}")
         
         # Morfolojik Başlık durumunu orijinal modelden çek
         model_orig = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
@@ -194,6 +204,8 @@ class ToprakTrainer:
         accumulation_vh_loss = 0.0
         accumulation_ch_loss = 0.0
         accumulation_mh_loss = 0.0
+        accumulation_sr_syllable_loss = 0.0
+        accumulation_sr_rhyme_loss = 0.0
         start_time = time.time()
         step_start_time = time.time()
         tokens_processed = 0
@@ -250,6 +262,13 @@ class ToprakTrainer:
                         loss = loss + ch_loss
                         accumulation_ch_loss += ch_loss.item() / self.config.grad_accum_steps
 
+                    # Hece ve Kafiye Auxiliary Loss
+                    if self.syllable_rhyme_loss is not None:
+                        sr_syllable_loss, sr_rhyme_loss = self.syllable_rhyme_loss(logits, labels, self.global_step)
+                        loss = loss + sr_syllable_loss + sr_rhyme_loss
+                        accumulation_sr_syllable_loss += sr_syllable_loss.item() / self.config.grad_accum_steps
+                        accumulation_sr_rhyme_loss += sr_rhyme_loss.item() / self.config.grad_accum_steps
+
                     # Morfolojik Başlık Auxiliary Loss
                     if getattr(model_orig, 'use_morph_head', False):
                         morph_logits = getattr(model_orig, '_last_morph_logits', None)
@@ -297,6 +316,8 @@ class ToprakTrainer:
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
                     accumulation_mh_loss = 0.0
+                    accumulation_sr_syllable_loss = 0.0
+                    accumulation_sr_rhyme_loss = 0.0
                     continue
 
                 # Başarılı step — nan sayacını sıfırla
@@ -317,6 +338,8 @@ class ToprakTrainer:
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
                     accumulation_mh_loss = 0.0
+                    accumulation_sr_syllable_loss = 0.0
+                    accumulation_sr_rhyme_loss = 0.0
                     continue
 
                 # Optimizer step
@@ -334,6 +357,8 @@ class ToprakTrainer:
                     avg_vh_loss = accumulation_vh_loss / 10.0
                     avg_ch_loss = accumulation_ch_loss / 10.0
                     avg_mh_loss = accumulation_mh_loss / 10.0
+                    avg_sr_syllable_loss = accumulation_sr_syllable_loss / 10.0
+                    avg_sr_rhyme_loss = accumulation_sr_rhyme_loss / 10.0
 
                     print(
                         f"  Step {self.global_step:>6d}/{self.config.max_steps} | "
@@ -355,6 +380,9 @@ class ToprakTrainer:
                             self.writer.add_scalar("train/vh_loss", avg_vh_loss, self.global_step)
                         if self.consonant_harmony_loss is not None:
                             self.writer.add_scalar("train/ch_loss", avg_ch_loss, self.global_step)
+                        if self.syllable_rhyme_loss is not None:
+                            self.writer.add_scalar("train/sr_syllable_loss", avg_sr_syllable_loss, self.global_step)
+                            self.writer.add_scalar("train/sr_rhyme_loss", avg_sr_rhyme_loss, self.global_step)
                         if getattr(model_orig, 'use_morph_head', False):
                             self.writer.add_scalar("train/mh_loss", avg_mh_loss, self.global_step)
                         if self.morph_weight_loss is not None:
@@ -367,6 +395,8 @@ class ToprakTrainer:
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
                     accumulation_mh_loss = 0.0
+                    accumulation_sr_syllable_loss = 0.0
+                    accumulation_sr_rhyme_loss = 0.0
                 # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
 
                 # Checkpoint kaydet
