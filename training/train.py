@@ -134,6 +134,16 @@ def parse_args():
         help="Ünsüz benzeşmesi loss warmup adım sayısı (varsayılan: 1000)"
     )
 
+    # Morfolojik Başlık (Auxiliary POS/Boundary Head)
+    parser.add_argument(
+        "--morph-head", action="store_true",
+        help="Morfolojik sınır ve POS çoklu görev başlığını aktifleştir"
+    )
+    parser.add_argument(
+        "--mh-lambda", type=float, default=0.2,
+        help="Morfolojik başlık loss ağırlığı (varsayılan: 0.2)"
+    )
+
     return parser.parse_args()
 
 
@@ -239,7 +249,12 @@ def main():
     # ─────────────────────────────────────────────
     # 5. Model
     # ─────────────────────────────────────────────
-    model = ToprakLM(config)
+    model = ToprakLM(config, tokenizer=tokenizer)
+    if args.morph_head:
+        model.use_morph_head = True
+        model.morph_lambda = args.mh_lambda
+        print(f"  ✓ Morfolojik Başlık aktif (λ={args.mh_lambda})")
+
     param_count = model.count_parameters()
     print(f"\n🧠 Model oluşturuldu: {param_count/1e6:.1f}M parametre")
 

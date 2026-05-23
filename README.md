@@ -61,7 +61,9 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **LR Scheduler** | Cosine annealing with linear warmup |
 | **Precision** | MPS: float32 / CUDA: float16 mixed precision |
 | **Türkçe Uyumu** | Ünlü Uyumu Auxiliary Loss (dünyada ilk, opsiyonel) |
+| **Ünsüz Benzeşmesi** | Ünsüz Benzeşmesi Auxiliary Loss (dünyada ilk, opsiyonel) |
 | **Morfolojik Kayıp** | Ek tokenlerine ağırlıklı CE Loss (dünyada ilk, opsiyonel) |
+| **Morfolojik Başlık** | Kök, Ek ve Özel Çoklu Görev (Multi-task) Sınıflandırma Başlığı (dünyada ilk, opsiyonel) |
 
 ---
 
@@ -109,7 +111,9 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 - **Causal Masking**: Dinamik üst üçgen mask ile autoregressive üretim
 - **Gradient Accumulation**: Küçük batch'lerle büyük efektif batch simülasyonu
 - **Ünlü Uyumu Loss**: Türkçe ünlü uyumuna aykırı token tahminlerini cezalandıran auxiliary loss (dünyada ilk)
+- **Ünsüz Benzeşmesi Loss**: Sert ünsüzle biten kelimelerden sonra yumuşak ünsüzle başlayan ek tahminlerini cezalandıran auxiliary loss (dünyada ilk)
 - **Morfolojik Ağırlıklı Kayıp**: Ek (suffix) tokenlerine daha yüksek CE loss ağırlığı vererek morfoloji öğrenimini güçlendirir (dünyada ilk)
+- **Morfolojik Sınır & Sentaks Başlığı (POS Head)**: Tokenları Kök, Ek ve Özel olarak 3 sınıfa ayıran çoklu görev (multi-task) yardımcı başlığı (dünyada ilk)
 
 ---
 
@@ -126,6 +130,7 @@ toprak/
 │   ├── rope.py                   #    RoPE — Rotary Position Embedding
 │   ├── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
 │   ├── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
+│   ├── consonant_harmony.py      #    Ünsüz Benzeşmesi Auxiliary Loss (Türkçe'ye özel)
 │   └── morph_weighting.py        #    Morfolojik Ağırlıklı CE Loss (dünyada ilk)
 │
 ├── data/                         # Veri Toplama & İşleme
@@ -151,6 +156,10 @@ toprak/
 │
 ├── scripts/                      # Yardımcı Araçlar
 │   └── prepare_data.py           #    Uçtan uca veri pipeline
+│
+├── tests/                        # 🧪 Testler (Birim ve Entegrasyon Testleri)
+│   ├── test_consonant_harmony.py #    Ünsüz benzeşmesi birim testleri
+│   └── test_morph_head.py        #    Morfolojik başlık birim testleri
 │
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    MIT Lisansı
@@ -380,7 +389,9 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Weight Tying**: Token embedding ↔ LM head aynı ağırlıklar
 - **Init**: Scaled init — residual projeksiyonlar `1/√(2N)` ile ölçeklendirilmiş
 - **Ünlü Uyumu Loss**: Türkçe büyük ünlü uyumunu auxiliary loss olarak enjekte eder (dünyada ilk)
+- **Ünsüz Benzeşmesi Loss**: Sert ünsüz sonrası yumuşak ünsüzlü ek tahminlerini cezalandırır (dünyada ilk)
 - **Morfolojik Ağırlıklı Kayıp**: Ek tokenlerine yüksek ağırlık → morfoloji farkındalığı (dünyada ilk)
+- **Morfolojik Sınır & Sentaks Başlığı**: Kök, ek ve özel token çoklu görev sınıflandırması (dünyada ilk)
 
 </details>
 

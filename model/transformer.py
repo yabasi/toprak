@@ -103,7 +103,7 @@ class ToprakLM(nn.Module):
     - Weight Tying (embedding ↔ LM head)
     """
 
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig, tokenizer=None):
         super().__init__()
         self.config = config
         self.gradient_checkpointing = False  # Eğitim sırasında etkinleştirilebilir
@@ -124,6 +124,41 @@ class ToprakLM(nn.Module):
 
         # Weight tying — embedding ve lm_head aynı ağırlıkları paylaşır
         self.tok_emb.weight = self.lm_head.weight
+
+        # ─── Morfolojik Başlık & Sınıflandırma ───
+        self.morph_head = nn.Linear(config.d_model, 3, bias=False)
+        self.use_morph_head = False
+        self.morph_lambda = 0.2
+        self._last_morph_loss = 0.0
+
+        # Tokenizer yoksa otomatik yüklemeyi dene
+        if tokenizer is None:
+            import os
+            for path in ["toprak_tokenizer.model", "../toprak_tokenizer.model", "../../toprak_tokenizer.model"]:
+                if os.path.exists(path):
+                    try:
+                        from model.tokenizer import ToprakTokenizer
+                        tokenizer = ToprakTokenizer(path)
+                        break
+                    except Exception:
+                        pass
+
+        # Her token için morfolojik sınıfı belirle
+        # 0 = Kök (root), 1 = Ek (suffix), 2 = Özel/Noktalama/Sayı (special)
+        token_classes = torch.zeros(config.vocab_size, dtype=torch.long)
+        if tokenizer is not None:
+            for token_id in range(config.vocab_size):
+                token_str = tokenizer.id_to_token(token_id)
+                if token_id < 4 or token_str in ('<sep>', '<cls>', '<mask>'):
+                    token_classes[token_id] = 2
+                elif token_str.startswith('▁'):
+                    has_letters = any(c.isalpha() for c in token_str)
+                    token_classes[token_id] = 0 if has_letters else 2
+                else:
+                    has_letters = any(c.isalpha() for c in token_str)
+                    token_classes[token_id] = 1 if has_letters else 2
+
+        self.register_buffer("token_morph_classes", token_classes)
 
         # RoPE frekanslarını önceden hesapla ve buffer olarak kaydet
         freqs_cis = precompute_freqs_cis(
@@ -199,6 +234,17 @@ class ToprakLM(nn.Module):
                 targets.view(-1),
                 ignore_index=self.config.pad_token_id,
             )
+
+            # Morfolojik çoklu görev kaybı (auxiliary loss)
+            if self.use_morph_head:
+                morph_logits = self.morph_head(x)  # (B, T, 3)
+                morph_loss = F.cross_entropy(
+                    morph_logits.view(-1, 3),
+                    self.token_morph_classes[targets].view(-1),
+                    ignore_index=self.config.pad_token_id,
+                )
+                self._last_morph_loss = morph_loss.item()
+                loss = loss + self.morph_lambda * morph_loss
 
         return logits, loss, present_kvs
 

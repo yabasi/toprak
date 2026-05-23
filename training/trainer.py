@@ -176,6 +176,13 @@ class ToprakTrainer:
         print(f"  Ünlü Uyumu Loss:     {'✅ (λ=' + str(self.vowel_harmony_loss.lambda_weight) + ')' if self.vowel_harmony_loss else '❌'}")
         print(f"  Morph Ağırlık:       {'✅ (w=' + str(self.morph_weight_loss.suffix_weight) + ')' if self.morph_weight_loss else '❌'}")
         print(f"  Ünsüz Benzeşmesi:    {'✅ (λ=' + str(self.consonant_harmony_loss.lambda_weight) + ')' if self.consonant_harmony_loss else '❌'}")
+        
+        # Morfolojik Başlık durumunu orijinal modelden çek
+        model_orig = self.model._orig_mod if hasattr(self.model, '_orig_mod') else self.model
+        use_mh = getattr(model_orig, 'use_morph_head', False)
+        mh_lambda = getattr(model_orig, 'morph_lambda', 0.2)
+        print(f"  Morfolojik Başlık:   {'✅ (λ=' + str(mh_lambda) + ')' if use_mh else '❌'}")
+        
         if self.writer:
             print(f"")
             print(f"  📊 Eğitim loglarını takip etmek için yeni bir terminalde:")
@@ -186,6 +193,7 @@ class ToprakTrainer:
         accumulation_loss = 0.0
         accumulation_vh_loss = 0.0
         accumulation_ch_loss = 0.0
+        accumulation_mh_loss = 0.0
         start_time = time.time()
         step_start_time = time.time()
         tokens_processed = 0
@@ -242,6 +250,20 @@ class ToprakTrainer:
                         loss = loss + ch_loss
                         accumulation_ch_loss += ch_loss.item() / self.config.grad_accum_steps
 
+                    # Morfolojik Başlık Auxiliary Loss
+                    if getattr(model_orig, 'use_morph_head', False):
+                        morph_logits = getattr(model_orig, '_last_morph_logits', None)
+                        if morph_logits is not None:
+                            mh_loss_val = F.cross_entropy(
+                                morph_logits.view(-1, 3),
+                                model_orig.token_morph_classes[labels].view(-1),
+                                ignore_index=self.config.pad_token_id,
+                            )
+                            if self.morph_weight_loss is not None:
+                                # Model forward'ında targets verilmediği için loss'a burada ekle
+                                loss = loss + model_orig.morph_lambda * mh_loss_val
+                            accumulation_mh_loss += mh_loss_val.item() / self.config.grad_accum_steps
+
                     # NaN/Inf loss kontrolü
                     if torch.isnan(loss) or torch.isinf(loss):
                         nan_in_batch = True
@@ -274,6 +296,7 @@ class ToprakTrainer:
                     accumulation_loss = 0.0
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
+                    accumulation_mh_loss = 0.0
                     continue
 
                 # Başarılı step — nan sayacını sıfırla
@@ -293,6 +316,7 @@ class ToprakTrainer:
                     accumulation_loss = 0.0
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
+                    accumulation_mh_loss = 0.0
                     continue
 
                 # Optimizer step
@@ -309,6 +333,7 @@ class ToprakTrainer:
                     avg_loss = accumulation_loss / 10.0
                     avg_vh_loss = accumulation_vh_loss / 10.0
                     avg_ch_loss = accumulation_ch_loss / 10.0
+                    avg_mh_loss = accumulation_mh_loss / 10.0
 
                     print(
                         f"  Step {self.global_step:>6d}/{self.config.max_steps} | "
@@ -330,6 +355,8 @@ class ToprakTrainer:
                             self.writer.add_scalar("train/vh_loss", avg_vh_loss, self.global_step)
                         if self.consonant_harmony_loss is not None:
                             self.writer.add_scalar("train/ch_loss", avg_ch_loss, self.global_step)
+                        if getattr(model_orig, 'use_morph_head', False):
+                            self.writer.add_scalar("train/mh_loss", avg_mh_loss, self.global_step)
                         if self.morph_weight_loss is not None:
                             self.writer.add_scalar("train/root_loss", self.morph_weight_loss._last_root_loss, self.global_step)
                             self.writer.add_scalar("train/suffix_loss", self.morph_weight_loss._last_suffix_loss, self.global_step)
@@ -339,6 +366,7 @@ class ToprakTrainer:
                     accumulation_loss = 0.0  # Sadece loglama sonrası sıfırla
                     accumulation_vh_loss = 0.0
                     accumulation_ch_loss = 0.0
+                    accumulation_mh_loss = 0.0
                 # Loglama step'i değilse — sonraki 10-step döngüsü için biriktirmeye devam et
 
                 # Checkpoint kaydet
@@ -458,7 +486,7 @@ class ToprakTrainer:
         if hasattr(self.model, '_orig_mod'):
             model_to_load = self.model._orig_mod
 
-        model_to_load.load_state_dict(checkpoint["model_state_dict"])
+        model_to_load.load_state_dict(checkpoint["model_state_dict"], strict=False)
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
         # Optimizer state'lerini doğru device'a taşı (CPU → MPS fix)
