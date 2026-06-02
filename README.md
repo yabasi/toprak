@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" />
   <img src="https://img.shields.io/badge/PyTorch-2.x-EE4C2C?style=flat-square&logo=pytorch&logoColor=white" />
   <img src="https://img.shields.io/badge/Apple_Silicon-MPS-000000?style=flat-square&logo=apple&logoColor=white" />
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" />
+  <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square" />
   <img src="https://img.shields.io/badge/Dil-Türkçe_🇹🇷-E30A17?style=flat-square" />
   <img src="https://img.shields.io/badge/Durum-Aktif_Geliştirme-yellow?style=flat-square" />
 </p>
