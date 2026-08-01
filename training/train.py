@@ -19,6 +19,7 @@ from model.config import ModelConfig, CONFIGS, detect_device
 from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
 from data.dataset import ToprakDataset, ToprakShardDataset, create_dataloader
+from data.mixture import CurriculumMixtureSampler
 from utils.validation import (
     validate_tokenizer, validate_dir_has_data,
     validate_checkpoint, validate_dataset_size,
@@ -129,6 +130,10 @@ def parse_args():
         "--verify-data-hashes", action="store_true",
         help="Bin shard SHA-256 değerlerini eğitimden önce doğrula"
     )
+    parser.add_argument(
+        "--no-mixture-sampling", action="store_true",
+        help="Manifestteki mixture sampler'ını devre dışı bırak"
+    )
 
     # Ünlü Uyumu Loss
     parser.add_argument(
@@ -228,6 +233,7 @@ def build_training_recipe(args, config) -> dict:
         "deterministic": args.deterministic,
         "data_fingerprint_mode": args.data_fingerprint,
         "verify_data_hashes": args.verify_data_hashes,
+        "mixture_sampling": not args.no_mixture_sampling,
         "auxiliary_losses": {
             "vowel_harmony": {
                 "enabled": args.vowel_harmony,
@@ -355,12 +361,23 @@ def main():
             print(f"  ⚠ Eval shard'ları yüklenemedi: {e}")
             eval_dataset = None
 
-        # Curriculum manifestleri kalite sırasını blok seviyesinde taşır.
-        # Global shuffle bu sırayı tamamen bozacağından yalnız normal
-        # shard setlerinde karıştırma yapılır.
-        shuffle_train = not train_dataset.curriculum
-        if train_dataset.curriculum:
-            print("  ✓ Curriculum sırası korunuyor (DataLoader shuffle kapalı)")
+        mixture_sampler = None
+        if train_dataset.mixture_config and not args.no_mixture_sampling:
+            mixture_sampler = CurriculumMixtureSampler(
+                train_dataset,
+                train_dataset.mixture_config,
+                seed=args.seed,
+                samples_per_step=config.batch_size * config.grad_accum_steps,
+            )
+            initial_weights = mixture_sampler.weights_at(0)
+            final_weights = mixture_sampler.weights_at(
+                train_dataset.mixture_config["curriculum_steps"]
+            )
+            print(f"  ✓ Mixture sampler aktif: başlangıç={initial_weights}")
+            print(f"    Final ağırlıklar: {final_weights}")
+        shuffle_train = mixture_sampler is None and not train_dataset.curriculum
+        if train_dataset.curriculum and mixture_sampler is None:
+            print("  ✓ Legacy curriculum sırası korunuyor (shuffle kapalı)")
         train_loader = create_dataloader(
             train_dataset,
             batch_size=config.batch_size,
@@ -368,6 +385,7 @@ def main():
             num_workers=args.num_workers,
             pin_memory=(config.device == "cuda"),
             seed=args.seed,
+            sampler=mixture_sampler,
         )
         eval_loader = None
         if eval_dataset is not None:
@@ -486,6 +504,8 @@ def main():
     # 7. Eğitim
     # ─────────────────────────────────────────────
     training_recipe = build_training_recipe(args, config)
+    if args.bin_mode:
+        training_recipe["mixture"] = train_dataset.mixture_config
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     print(f"\n🔐 Deney parmak izi hazırlanıyor ({args.data_fingerprint})...")
     experiment_manifest = build_experiment_manifest(

@@ -36,7 +36,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
-> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md). Yardımcı kayıplar için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md), deney tekrarları için [REPRODUCIBILITY.md](REPRODUCIBILITY.md) dosyasına bakın.
+> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md). Yardımcı kayıplar için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md), deney tekrarları için [REPRODUCIBILITY.md](REPRODUCIBILITY.md), veri karışımı için [DATA_MIXTURE.md](DATA_MIXTURE.md) dosyasına bakın.
 
 ---
 

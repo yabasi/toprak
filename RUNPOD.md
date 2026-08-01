@@ -108,7 +108,7 @@ train_tokenizer(
 ### 1f) Pre-tokenize → .bin shard'lar
 
 ```bash
-# JSONL → uint16 .bin shard'ları (curriculum: Wiki son shard'lara)
+# JSONL → kaynak gruplu uint16 .bin shard'ları ve curriculum schedule
 python scripts/pretokenize.py \
   --input-dir /workspace/data_raw/clean \
   --tokenizer /workspace/toprak/toprak_tokenizer.model \

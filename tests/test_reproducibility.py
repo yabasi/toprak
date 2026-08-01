@@ -75,6 +75,7 @@ def cursor_trainer(loader):
     trainer = ToprakTrainer.__new__(ToprakTrainer)
     trainer.train_dataloader = loader
     trainer._data_epoch_generator_state = None
+    trainer._data_epoch_sampler_state = None
     trainer._data_batch_in_epoch = 0
     trainer._resume_data_state = None
     return trainer

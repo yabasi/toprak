@@ -1,0 +1,22 @@
+{
+  "version": "toprak-mixture-v1",
+  "curriculum_steps": 20000,
+  "groups": {
+    "curated": {
+      "sources": ["wiki"],
+      "initial_weight": 0.65,
+      "final_weight": 0.35
+    },
+    "web": {
+      "sources": ["fineweb2", "culturax"],
+      "initial_weight": 0.25,
+      "final_weight": 0.45
+    },
+    "other": {
+      "sources": [],
+      "default": true,
+      "initial_weight": 0.10,
+      "final_weight": 0.20
+    }
+  }
+}

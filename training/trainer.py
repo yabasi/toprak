@@ -80,6 +80,7 @@ class ToprakTrainer:
         self.training_recipe = training_recipe or {}
         self.experiment_manifest = experiment_manifest or {}
         self._data_epoch_generator_state = None
+        self._data_epoch_sampler_state = None
         self._data_batch_in_epoch = 0
         self._resume_data_state = None
 
@@ -183,12 +184,18 @@ class ToprakTrainer:
             generator_state = generator_state.clone()
         return {
             "epoch_generator_state": generator_state,
+            "sampler_state": self._data_epoch_sampler_state,
             "batch_in_epoch": self._data_batch_in_epoch,
         }
+
+    def _training_sampler(self):
+        batch_sampler = getattr(self.train_dataloader, "batch_sampler", None)
+        return getattr(batch_sampler, "sampler", None)
 
     def _create_data_iterator(self):
         """Aynı epoch permütasyonunu ve batch cursor'unu yeniden kur."""
         generator = getattr(self.train_dataloader, "generator", None)
+        sampler = self._training_sampler()
         resume_state = self._resume_data_state
         if resume_state:
             epoch_state = resume_state.get("epoch_generator_state")
@@ -199,9 +206,15 @@ class ToprakTrainer:
                         "Checkpoint veri cursor'u için seed'li DataLoader generator gerekli"
                     )
                 generator.set_state(epoch_state)
+            sampler_state = resume_state.get("sampler_state")
+            if sampler_state is not None:
+                if not hasattr(sampler, "load_state_dict"):
+                    raise RuntimeError("Checkpoint sampler durumu yüklenemiyor")
+                sampler.load_state_dict(sampler_state)
             self._data_epoch_generator_state = (
                 epoch_state.clone() if isinstance(epoch_state, torch.Tensor) else epoch_state
             )
+            self._data_epoch_sampler_state = sampler_state
             data_iter = iter(self.train_dataloader)
             for _ in range(batch_in_epoch):
                 try:
@@ -214,8 +227,13 @@ class ToprakTrainer:
             self._resume_data_state = None
             return data_iter
 
+        if hasattr(sampler, "set_training_step"):
+            sampler.set_training_step(self.global_step)
         self._data_epoch_generator_state = (
             generator.get_state().clone() if generator is not None else None
+        )
+        self._data_epoch_sampler_state = (
+            sampler.state_dict() if hasattr(sampler, "state_dict") else None
         )
         self._data_batch_in_epoch = 0
         return iter(self.train_dataloader)
@@ -490,6 +508,14 @@ class ToprakTrainer:
                         self.writer.add_scalar("train/tokens_per_sec", tokens_per_sec, self.global_step)
                         self.writer.add_scalar("train/grad_norm", grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm, self.global_step)
                         self.writer.add_scalar("train/epoch_time_min", elapsed / 60, self.global_step)
+                        sampler = self._training_sampler()
+                        if hasattr(sampler, "weights_at"):
+                            for group, weight in sampler.weights_at(self.global_step).items():
+                                self.writer.add_scalar(
+                                    f"data_mixture/{group}_weight",
+                                    weight,
+                                    self.global_step,
+                                )
                         if self.vowel_harmony_loss is not None:
                             self.writer.add_scalar("train/vh_loss", avg_vh_loss, self.global_step)
                         if self.consonant_harmony_loss is not None:

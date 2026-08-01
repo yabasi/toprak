@@ -13,8 +13,8 @@ Format:
     - Manifest: data_bin/manifest.json (shard listesi + token sayıları)
 
 Curriculum:
-    --curriculum açıksa, Wikipedia dokümanları son shard'lara yerleştirilir
-    (annealing — eğitim sonunda yüksek kaliteli veriye geçiş için).
+    Kaynaklar ayrı shard gruplarına yazılır. Eğitim sampler'ı grup
+    ağırlıklarını adıma göre lineer olarak değiştirir.
 
 Kullanım:
     python scripts/pretokenize.py \
@@ -23,7 +23,7 @@ Kullanım:
         --output-dir data_bin \
         --shard-size 100000000 \
         --eval-ratio 0.005 \
-        --curriculum
+        --mixture-config configs/data_mixture.json
 """
 
 import argparse
@@ -40,6 +40,12 @@ import numpy as np
 from tqdm import tqdm
 
 from model.tokenizer import ToprakTokenizer
+from data.mixture import (
+    legacy_curriculum_config,
+    load_mixture_config,
+    resolve_group,
+    validate_mixture_config,
+)
 from utils.reproducibility import file_sha256, fingerprint_data
 
 
@@ -120,6 +126,10 @@ def tokenize_corpus(
     curriculum: bool = False,
     high_quality_sources: Tuple[str, ...] = ("wiki",),
     tokenizer_path: Optional[str] = None,
+    mixture_config: Optional[dict] = None,
+    curriculum_steps: int = 10_000,
+    hq_initial_weight: float = 0.8,
+    hq_final_weight: float = 0.4,
 ):
     """
     Temizlenmiş JSONL'leri tokenize edip shard'lara yaz.
@@ -131,8 +141,8 @@ def tokenize_corpus(
         shard_size: shard başına token sayısı
         eval_ratio: doc-level eval split oranı
         seed: rng seed
-        curriculum: True ise high_quality_sources (örn. wiki) son shard'lara yazılır
-        high_quality_sources: curriculum'da öne çekilmek yerine sona bırakılacak kaynaklar
+        curriculum: Basit high_quality/general schedule'ını etkinleştirir
+        high_quality_sources: high_quality grubuna atanacak kaynaklar
         tokenizer_path: Manifestte SHA-256'sı saklanacak tokenizer yolu
     """
     rng = random.Random(seed)
@@ -142,73 +152,90 @@ def tokenize_corpus(
     bos = tokenizer.bos_token_id
     eos = tokenizer.eos_token_id
 
-    train_writer = ShardWriter(out_dir, "train", shard_size)
+    if mixture_config is not None:
+        mixture_config = validate_mixture_config(mixture_config)
+    elif curriculum:
+        mixture_config = legacy_curriculum_config(
+            high_quality_sources,
+            curriculum_steps,
+            hq_initial_weight,
+            hq_final_weight,
+        )
+
+    if mixture_config:
+        train_writers = {
+            group: ShardWriter(out_dir, f"train_{group}", shard_size)
+            for group in mixture_config["groups"]
+        }
+    else:
+        train_writers = {"all": ShardWriter(out_dir, "train", shard_size)}
     eval_writer = ShardWriter(out_dir, "eval", max(shard_size // 10, 1_000_000))
 
-    # Curriculum stratejisi: high-quality kaynakları ayrı listeye topla,
-    # düşük öncelik olanları önce yaz, yüksek kalitelileri sona bırak.
     print(f"\n📑 Doküman taraması başlıyor: {input_dir}")
-    print(f"   Curriculum: {'AÇIK (HQ sona)' if curriculum else 'KAPALI (karışık)'}")
-    print(f"   Yüksek kalite kaynaklar: {high_quality_sources}")
-
-    # Tüm dokümanları belleğe almıyoruz — yalnızca path/index referansı yok.
-    # İki geçişli yaklaşım: önce non-HQ, sonra HQ. JSONL'i iki kez okur.
-    if curriculum:
-        passes = [
-            ("low",  lambda src: src not in high_quality_sources),
-            ("high", lambda src: src in high_quality_sources),
-        ]
-    else:
-        passes = [("all", lambda src: True)]
+    print(f"   Mixture: {'AÇIK' if mixture_config else 'KAPALI'}")
+    if mixture_config:
+        print(f"   Gruplar: {', '.join(mixture_config['groups'])}")
 
     total_docs = 0
     eval_docs = 0
     t0 = time.time()
 
-    for pass_name, src_filter_fn in passes:
-        print(f"\n▶ Pass: {pass_name}")
-        pbar = tqdm(_iter_jsonl_docs(input_dir), desc=f"tokenize:{pass_name}", unit="doc")
-        for src, text in pbar:
-            if not src_filter_fn(src):
-                continue
-            try:
-                ids = tokenizer.encode(text, add_bos=False, add_eos=False)
-            except Exception:
-                continue
-            if not ids:
-                continue
-            # BOS/EOS sarmalama
-            arr = np.empty(len(ids) + 2, dtype=DTYPE)
-            arr[0] = bos
-            arr[1:-1] = np.asarray(ids, dtype=DTYPE)
-            arr[-1] = eos
+    group_docs = {group: 0 for group in train_writers}
+    pbar = tqdm(_iter_jsonl_docs(input_dir), desc="tokenize", unit="doc")
+    for src, text in pbar:
+        try:
+            ids = tokenizer.encode(text, add_bos=False, add_eos=False)
+        except Exception:
+            continue
+        if not ids:
+            continue
+        arr = np.empty(len(ids) + 2, dtype=DTYPE)
+        arr[0] = bos
+        arr[1:-1] = np.asarray(ids, dtype=DTYPE)
+        arr[-1] = eos
 
-            # Eval split (doc-level)
-            if rng.random() < eval_ratio:
-                eval_writer.write(arr)
-                eval_docs += 1
-            else:
-                train_writer.write(arr)
-            total_docs += 1
+        if rng.random() < eval_ratio:
+            eval_writer.write(arr)
+            eval_docs += 1
+        else:
+            group = resolve_group(src, mixture_config) if mixture_config else "all"
+            train_writers[group].write(arr)
+            group_docs[group] += 1
+        total_docs += 1
+        if total_docs % 5000 == 0:
+            train_tokens = sum(writer.total_tokens for writer in train_writers.values())
+            pbar.set_postfix(
+                train_tok=f"{train_tokens/1e6:.1f}M",
+                eval_tok=f"{eval_writer.total_tokens/1e6:.1f}M",
+            )
 
-            if total_docs % 5000 == 0:
-                pbar.set_postfix(
-                    train_tok=f"{train_writer.total_tokens/1e6:.1f}M",
-                    eval_tok=f"{eval_writer.total_tokens/1e6:.1f}M",
-                )
-
-    train_shards, train_total = train_writer.close()
+    train_shards = []
+    train_total = 0
+    for group, writer in train_writers.items():
+        shards, tokens = writer.close()
+        train_total += tokens
+        train_shards.extend((path, count, group) for path, count in shards)
     eval_shards, eval_total = eval_writer.close()
+    empty_groups = [group for group, count in group_docs.items() if count == 0]
+    if mixture_config and empty_groups:
+        raise ValueError(
+            "Mixture gruplarında train dokümanı yok: "
+            f"{empty_groups}. Kaynak eşlemelerini veya eval_ratio değerini kontrol edin."
+        )
 
-    def shard_entries(shards):
-        return [
-            {
+    def shard_entries(shards, include_group=False):
+        entries = []
+        for shard in shards:
+            path, tokens = shard[:2]
+            entry = {
                 "path": os.path.basename(path),
                 "tokens": tokens,
                 "sha256": file_sha256(path),
             }
-            for path, tokens in shards
-        ]
+            if include_group:
+                entry["group"] = shard[2]
+            entries.append(entry)
+        return entries
 
     manifest = {
         "format_version": "toprak-shards-v2",
@@ -219,11 +246,13 @@ def tokenize_corpus(
         "dtype": "uint16",
         "shard_size_tokens": shard_size,
         "eval_ratio": eval_ratio,
-        "curriculum": curriculum,
+        "curriculum": bool(mixture_config),
         "high_quality_sources": list(high_quality_sources),
+        "mixture": mixture_config,
         "train": {
-            "shards": shard_entries(train_shards),
+            "shards": shard_entries(train_shards, include_group=True),
             "total_tokens": int(train_total),
+            "group_docs": group_docs,
         },
         "eval": {
             "shards": shard_entries(eval_shards),
@@ -260,12 +289,21 @@ def main():
     parser.add_argument("--eval-ratio", type=float, default=0.005,
                         help="Eval split oranı (varsayılan 0.005 = %%0.5)")
     parser.add_argument("--curriculum", action="store_true",
-                        help="Wikipedia gibi yüksek kalite kaynakları son shard'lara yerleştir")
+                        help="İki gruplu lineer HQ/general mixture schedule kullan")
     parser.add_argument("--hq-sources", nargs="*", default=["wiki"],
                         help="Yüksek kalite kaynak etiketleri (source alanı)")
+    parser.add_argument(
+        "--mixture-config", default=None,
+        help="Kaynak grupları ve curriculum ağırlıkları için JSON config",
+    )
+    parser.add_argument("--curriculum-steps", type=int, default=10_000)
+    parser.add_argument("--hq-initial-weight", type=float, default=0.8)
+    parser.add_argument("--hq-final-weight", type=float, default=0.4)
     parser.add_argument("--seed", type=int, default=42)
 
     args = parser.parse_args()
+    if args.mixture_config and args.curriculum:
+        parser.error("--mixture-config ve --curriculum birlikte kullanılamaz")
 
     print(f"🌱 Toprak — Pre-tokenize")
     print(f"   Tokenizer:  {args.tokenizer}")
@@ -275,6 +313,9 @@ def main():
 
     tokenizer = ToprakTokenizer(args.tokenizer)
     print(f"   Vocab:      {tokenizer.get_vocab_size():,}")
+    mixture_config = (
+        load_mixture_config(args.mixture_config) if args.mixture_config else None
+    )
 
     tokenize_corpus(
         input_dir=args.input_dir,
@@ -286,6 +327,10 @@ def main():
         curriculum=args.curriculum,
         high_quality_sources=tuple(args.hq_sources),
         tokenizer_path=args.tokenizer,
+        mixture_config=mixture_config,
+        curriculum_steps=args.curriculum_steps,
+        hq_initial_weight=args.hq_initial_weight,
+        hq_final_weight=args.hq_final_weight,
     )
 
 

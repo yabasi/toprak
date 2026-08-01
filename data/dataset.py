@@ -4,6 +4,7 @@
 import json
 import os
 import random
+from collections import defaultdict
 from typing import List, Optional
 
 import numpy as np
@@ -241,6 +242,8 @@ class ToprakShardDataset(Dataset):
         self.dtype = manifest_dtype
         self.bin_dir = os.path.realpath(bin_dir)
         self.curriculum = bool(manifest.get("curriculum", False))
+        self.mixture_config = manifest.get("mixture") if split == "train" else None
+        self.group_ranges = defaultdict(list)
 
         # Shard'ları yükle (memmap)
         shard_entries = list(meta.get("shards", []))
@@ -303,6 +306,8 @@ class ToprakShardDataset(Dataset):
             self.shards.append(arr)
             self.shard_paths.append(path)
             self.shard_blocks.append(n_blocks)
+            group = str(entry.get("group", "all"))
+            self.group_ranges[group].append((running, running + n_blocks))
             running += n_blocks
             self.cum_blocks.append(running)
 
@@ -313,6 +318,7 @@ class ToprakShardDataset(Dataset):
 
         self.total_tokens = int(file_token_total)
         self.total_blocks = running
+        self.group_ranges = dict(self.group_ranges)
 
         declared_total = meta.get("total_tokens")
         if declared_total != self.total_tokens:
@@ -369,6 +375,7 @@ def create_dataloader(
     pin_memory: bool = False,
     drop_last: bool = True,
     seed: Optional[int] = None,
+    sampler=None,
 ) -> DataLoader:
     """DataLoader oluştur."""
     generator = None
@@ -378,7 +385,8 @@ def create_dataloader(
     return DataLoader(
         dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle if sampler is None else False,
+        sampler=sampler,
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=drop_last,
