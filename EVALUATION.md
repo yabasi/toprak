@@ -4,6 +4,9 @@ Toprak Eval v1, checkpointleri yalnız perplexity ile değil Türkçe yetenek ve
 güvenlik boyutlarıyla karşılaştırmak için deterministik bir değerlendirme
 paketidir.
 
+Tokenizerın model eğitiminden önceki kapsam ve verim analizi ayrı olarak
+[TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md) protokolüyle yapılır.
+
 ## Kapsam
 
 Sürümlü seed set şu kategorileri içerir:

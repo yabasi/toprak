@@ -63,6 +63,18 @@ data_cache/
 └── wikipedia_tr.jsonl  ← Ham veri
 ```
 
+Tokenizerı sürümlü Türkçe seed setinde veya eğitim-dışı kendi corpusunuzda
+ölçmek için:
+
+```bash
+python3 evaluation/analyze_tokenizer.py \
+  --tokenizer current=toprak_tokenizer.model \
+  --output evaluation/reports/tokenizer-current.json
+```
+
+Fertility, byte fallback, round-trip ve morfolojik sınır metriklerinin ayrıntısı
+için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md) dosyasına bakın.
+
 ---
 
 ## 3. Eğitim

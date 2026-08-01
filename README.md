@@ -30,13 +30,13 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 **Toprak**, bu eksikliği gidermek için doğdu:
 
 - **Sıfırdan inşa** — Hiçbir mevcut modelden fine-tune yapılmıyor. Mimari, tokenizer, ağırlıklar — her şey bu proje kapsamında yazılıyor.
-- **Türkçe'ye özel** — 32.000 kelimelik Türkçe BPE tokenizer, `ç`, `ğ`, `ı`, `ö`, `ş`, `ü` karakterlerine tam destek.
+- **Türkçe'ye özel** — 32.000 tokenlık Türkçe BPE tokenizer; `ç`, `ğ`, `ı`, `ö`, `ş`, `ü` ve byte fallback desteği.
 - **Apple Silicon optimizasyonu** — M4 Pro / MPS (Metal GPU) üzerinde optimize float32 ile eğitim.
 - **Tamamen açık kaynak** — Kod, mimari, eğitim süreci — her şey şeffaf ve erişilebilir.
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
-> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md) — Kurulum, eğitim, inference, parametreler ve sık sorulan sorular. Yardımcı kayıpların kontrollü ölçümü için [ABLATION.md](ABLATION.md) dosyasına bakın.
+> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md) — Kurulum, eğitim, inference, parametreler ve sık sorulan sorular. Yardımcı kayıpların kontrollü ölçümü için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md) dosyasına bakın.
 
 ---
 
@@ -53,7 +53,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **Aktivasyon** | SwiGLU (gated FFN, SiLU tabanlı) |
 | **Pozisyon** | RoPE (Rotary Position Embedding) |
 | **Attention** | GQA (Grouped Query Attention) + KV Cache + SDPA |
-| **Tokenizer** | 32K BPE (SentencePiece, Türkçe morfolojisine uygun) |
+| **Tokenizer** | 32K BPE (SentencePiece); kapsam, fertility ve morfoloji analiz paketi |
 | **Eğitim Verisi** | Türkçe Wikipedia + haber siteleri + kamu kaynakları |
 | **Cihaz** | Auto-detect: CUDA (NVIDIA) / MPS (Apple Silicon) / CPU |
 | **Framework** | PyTorch 2.x + torch.compile() |
@@ -158,6 +158,9 @@ toprak/
 │   ├── evaluate_suite.py         #    Checkpoint karşılaştırma CLI
 │   ├── ablation.py               #    Eşlenik delta + bootstrap analizi
 │   ├── compare_ablation.py       #    Ablation raporu CLI
+│   ├── tokenizer_analysis.py     #    Fertility, kapsam ve morfoloji metrikleri
+│   ├── analyze_tokenizer.py      #    Çoklu tokenizer karşılaştırma CLI
+│   ├── tokenizer_seed.json       #    Sürümlü Türkçe tokenizer seed seti
 │   └── benchmarks/               #    Sürümlü Türkçe seed benchmarklar
 │
 ├── upload/                       # HuggingFace Entegrasyonu
@@ -174,6 +177,7 @@ toprak/
 ├── DATA_GOVERNANCE.md            #    Veri lisansı, kalite ve izlenebilirlik rehberi
 ├── EVALUATION.md                 #    Eval görevleri, metrikler ve rapor şeması
 ├── ABLATION.md                   #    Yardımcı loss katkı ölçüm protokolü
+├── TOKENIZER_ANALYSIS.md         #    Tokenizer ölçüm ve karşılaştırma rehberi
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```
@@ -426,7 +430,8 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 
 - **Algoritma**: BPE (Byte Pair Encoding) — SentencePiece
 - **Vocab**: 32,000 token
-- **Karakter kapsama**: %99.99 (Türkçe karakterler dahil)
+- **Karakter kapsama hedefi**: SentencePiece eğitim parametresi %99.99 + byte fallback
+- **Sürümlü seed ölçümü**: 2.037 token/kelime, %0 UNK, %100 normalize round-trip; yeniden ölçmek için `evaluation/analyze_tokenizer.py`
 - **Özel tokenler**: `PAD(0)`, `UNK(1)`, `BOS(2)`, `EOS(3)`, `<sep>`, `<cls>`, `<mask>`
 - **Normalizasyon**: NFKC
 - **Byte fallback**: Etkin (bilinmeyen karakter desteği)

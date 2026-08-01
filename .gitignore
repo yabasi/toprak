@@ -114,6 +114,9 @@ secrets.json
 **/credentials*
 **/token*
 !model/tokenizer.py
+!TOKENIZER_ANALYSIS.md
+!evaluation/tokenizer_analysis.py
+!evaluation/tokenizer_seed.json
 
 # ─────────────────────────────────────────────────────
 #  Proje Kılavuzu (Kişisel Doküman)
