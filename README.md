@@ -153,7 +153,10 @@ toprak/
 │   └── chat.py                   #    Terminal tabanlı interaktif sohbet
 │
 ├── evaluation/                   # Değerlendirme
-│   └── eval.py                   #    Perplexity hesaplama
+│   ├── eval.py                   #    Perplexity hesaplama
+│   ├── suite.py                  #    Çok boyutlu deterministik eval motoru
+│   ├── evaluate_suite.py         #    Checkpoint karşılaştırma CLI
+│   └── benchmarks/               #    Sürümlü Türkçe seed benchmarklar
 │
 ├── upload/                       # HuggingFace Entegrasyonu
 │   └── push_to_hub.py            #    Model + tokenizer yükleme
@@ -166,6 +169,7 @@ toprak/
 │   └── test_morph_head.py        #    Morfolojik başlık birim testleri
 │
 ├── DATA_GOVERNANCE.md            #    Veri lisansı, kalite ve izlenebilirlik rehberi
+├── EVALUATION.md                 #    Eval görevleri, metrikler ve rapor şeması
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```
@@ -293,17 +297,18 @@ python3 inference/generate.py \
 ### Değerlendirme
 
 ```bash
-python3 evaluation/eval.py \
+python3 evaluation/evaluate_suite.py \
   --checkpoint checkpoints/toprak_best.pt \
-  --eval-data data_cache/clean/eval \
-  --tokenizer toprak_tokenizer.model
+  --tokenizer toprak_tokenizer.model \
+  --perplexity-data data_cache/clean/eval \
+  --output evaluation/reports/toprak_best.json
 ```
 
-| Perplexity | Anlam |
-|---|---|
-| < 50 | ✅ Hedef başarıldı |
-| 50–100 | 🟡 İyi yolda |
-| > 100 | 🔴 Daha fazla veri/eğitim gerekli |
+Bu komut perplexity ile birlikte Türkçe dilbilgisi, morfoloji, okuduğunu
+anlama, genel kültür, akıl yürütme, uzun bağlam, güvenlik ve ezberleme
+metriklerini üretir. Perplexity yalnız aynı tokenizer ve sabit eval setiyle
+üretilen raporlar arasında karşılaştırılmalıdır. Ayrıntılar:
+[EVALUATION.md](EVALUATION.md).
 
 ---
 
@@ -335,9 +340,9 @@ python3 data/cleaner.py --input data_cache --output data_cache/clean
 python3 training/train.py --resume checkpoints/toprak_last.pt \
   --data-dir data_cache/clean/train
 
-# 4. Değerlendir
-python3 evaluation/eval.py --checkpoint checkpoints/toprak_best.pt \
-  --eval-data data_cache/clean/eval
+# 4. Çok boyutlu değerlendir
+python3 evaluation/evaluate_suite.py --checkpoint checkpoints/toprak_best.pt \
+  --perplexity-data data_cache/clean/eval
 
 # 5. HuggingFace'e yükle
 python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \

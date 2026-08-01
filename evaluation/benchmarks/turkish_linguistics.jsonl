@@ -1,0 +1,8 @@
+{"id":"morph-001","type":"pairwise","category":"morphology","prompt":"Bahçedeki çocuklar neşeyle","chosen":" oynuyorlar.","rejected":" oynuyorum.","skill":"kisi_cogul_uyumu"}
+{"id":"morph-002","type":"pairwise","category":"morphology","prompt":"Dün akşam arkadaşlarımla sinemaya","chosen":" gittim.","rejected":" gideceksin.","skill":"zaman_kisi_uyumu"}
+{"id":"morph-003","type":"pairwise","category":"morphology","prompt":"Kitapları masanın üzerine","chosen":" bıraktık.","rejected":" bıraktınızım.","skill":"ek_dizilimi"}
+{"id":"harmony-001","type":"pairwise","category":"vowel_harmony","prompt":"Bu sabah okul","chosen":"dan erken çıktım.","rejected":"den erken çıktım.","skill":"buyuk_unlu_uyumu"}
+{"id":"harmony-002","type":"pairwise","category":"vowel_harmony","prompt":"Çocuk, oyuncak","chosen":"ları kutuya koydu.","rejected":"leri kutuya koydu.","skill":"buyuk_unlu_uyumu"}
+{"id":"consonant-001","type":"pairwise","category":"consonant_harmony","prompt":"Ağaç","chosen":"ta iki kuş vardı.","rejected":"da iki kuş vardı.","skill":"unsuz_benzesmesi"}
+{"id":"grammar-001","type":"pairwise","category":"grammar","prompt":"Ayşe ve Zeynep yarın toplantıya","chosen":" katılacaklar.","rejected":" katılacağım.","skill":"ozne_yuklem_uyumu"}
+{"id":"grammar-002","type":"pairwise","category":"grammar","prompt":"Eğer hava güzel olursa pikniğe","chosen":" gideceğiz.","rejected":" gittik dün.","skill":"kosul_zaman_uyumu"}

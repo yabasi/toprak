@@ -9,7 +9,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from data.dataset import ToprakShardDataset
+from data.dataset import ToprakShardDataset, create_dataloader
 
 
 def test_shard_dataset_basic():
@@ -116,6 +116,20 @@ class TestShardManifestValidation(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "token sayısı uyuşmuyor"):
                 ToprakShardDataset(d, split="train", max_seq_len=100)
+
+    def test_eval_dataloader_keeps_incomplete_batch(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_fixture(d)
+            dataset = ToprakShardDataset(d, split="train", max_seq_len=100)
+            loader = create_dataloader(
+                dataset,
+                batch_size=8,
+                shuffle=False,
+                drop_last=False,
+            )
+            batches = list(loader)
+            self.assertEqual(len(batches), 1)
+            self.assertEqual(batches[0]["input_ids"].shape[0], 2)
 
 
 if __name__ == "__main__":

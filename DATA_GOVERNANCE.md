@@ -69,10 +69,11 @@ numarası örüntülerini yer tutucularla değiştirir. Bu katman tüm kişisel
 verilerin temizlendiğine dair garanti değildir; ad ve serbest biçimli adres
 gibi bağlama bağlı alanlar ayrıca örneklenip denetlenmelidir.
 
-Benchmark girdisi `.jsonl` veya `.txt` olabilir. JSONL kayıtlarında `text`
-ya da `question` ve isteğe bağlı `id` alanı kullanılır. Varsayılan davranış
-eşleşen belgeleri eğitim verisinden çıkarmaktır; `flag` seçeneği yalnız
-metadata'ya işler.
+Benchmark girdisi `.jsonl` veya `.txt` olabilir. JSONL kayıtlarında `text`,
+`prompt`, `question`, `chosen`, `rejected`, `needle`, `reference`, `filler`,
+`choices` ve `references` alanları taranır; isteğe bağlı `id` eşleşme kaydına
+eklenir. Varsayılan davranış eşleşen belgeleri eğitim verisinden çıkarmaktır;
+`flag` seçeneği yalnız metadata'ya işler.
 
 Her temizleme çalışması çıktı dizinine `corpus_manifest.json` yazar. Manifest,
 ayarları, sayaçları, kaynak/lisans durum dağılımını ve çıktı dosyalarının

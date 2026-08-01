@@ -284,8 +284,27 @@ class ContaminationDetector:
                             record = json.loads(line)
                         except json.JSONDecodeError:
                             continue
-                        text = record.get("text") or record.get("question") or ""
-                        record_id = str(record.get("id", record_id))
+                        base_id = str(record.get("id", record_id))
+                        text_fields = (
+                            "text", "prompt", "question", "chosen", "rejected",
+                            "needle", "reference", "filler",
+                        )
+                        emitted = False
+                        for field in text_fields:
+                            value = record.get(field)
+                            if isinstance(value, str) and value:
+                                emitted = True
+                                yield f"{base_id}:{field}", value
+                        for field in ("choices", "references"):
+                            values = record.get(field, [])
+                            if isinstance(values, list):
+                                for index, value in enumerate(values):
+                                    if isinstance(value, str) and value:
+                                        emitted = True
+                                        yield f"{base_id}:{field}:{index}", value
+                        if emitted:
+                            continue
+                        text = ""
                     if text:
                         yield record_id, text
 

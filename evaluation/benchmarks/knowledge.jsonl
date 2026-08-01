@@ -1,0 +1,5 @@
+{"id":"knowledge-001","type":"multiple_choice","category":"general_knowledge","prompt":"Soru: Türkiye Cumhuriyeti'nin başkenti neresidir?\nYanıt:","choices":[" İstanbul'dur."," Ankara'dır."," İzmir'dir."," Bursa'dır."],"answer":1}
+{"id":"knowledge-002","type":"multiple_choice","category":"general_knowledge","prompt":"Soru: Suyun kimyasal formülü hangisidir?\nYanıt:","choices":[" CO2'dir."," O2'dir."," H2O'dur."," NaCl'dir."],"answer":2}
+{"id":"knowledge-003","type":"multiple_choice","category":"general_knowledge","prompt":"Soru: Türkiye Büyük Millet Meclisi hangi yılda açılmıştır?\nYanıt:","choices":[" 1919 yılında."," 1920 yılında."," 1923 yılında."," 1938 yılında."],"answer":1}
+{"id":"knowledge-004","type":"multiple_choice","category":"general_knowledge","prompt":"Soru: Dünya'nın doğal uydusunun adı nedir?\nYanıt:","choices":[" Mars'tır."," Venüs'tür."," Ay'dır."," Güneş'tir."],"answer":2}
+{"id":"knowledge-005","type":"multiple_choice","category":"general_knowledge","prompt":"Soru: Fotosentez sırasında bitkiler atmosferden ağırlıklı olarak hangi gazı alır?\nYanıt:","choices":[" Karbondioksit alır."," Helyum alır."," Hidrojen alır."," Neon alır."],"answer":0}

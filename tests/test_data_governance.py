@@ -61,7 +61,7 @@ class TestDataGovernance(unittest.TestCase):
                 handle.write(json.dumps({"id": "bench-1", "text": benchmark}) + "\n")
             detector = ContaminationDetector(path, ngram_size=5, min_hits=2)
             matches = detector.find_matches("Giriş cümlesi. " + benchmark + " Son cümle.")
-            self.assertEqual(matches, ["bench-1"])
+            self.assertEqual(matches, ["bench-1:text"])
 
     def test_cleaner_rejects_contaminated_document(self):
         benchmark = (
@@ -80,6 +80,22 @@ class TestDataGovernance(unittest.TestCase):
             )
             self.assertIsNone(cleaner.clean_text("Başlangıç. " + benchmark + " Bitiş."))
             self.assertEqual(cleaner.stats["contaminated"], 1)
+
+    def test_evaluation_prompt_fields_are_fingerprinted(self):
+        detector = ContaminationDetector(
+            os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "evaluation",
+                "benchmarks",
+            ),
+            ngram_size=5,
+            min_hits=2,
+        )
+        matches = detector.find_matches(
+            "Elif sabah erkenden kütüphaneye gitti. Öğlene kadar tarih kitabını "
+            "okudu, ardından aldığı notları düzenledi."
+        )
+        self.assertTrue(any(match.startswith("reading-001:prompt") for match in matches))
 
     def test_clean_directory_writes_traceable_manifest(self):
         text = (

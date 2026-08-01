@@ -351,6 +351,7 @@ def create_dataloader(
     shuffle: bool = True,
     num_workers: int = 0,
     pin_memory: bool = False,
+    drop_last: bool = True,
 ) -> DataLoader:
     """DataLoader oluştur."""
     return DataLoader(
@@ -359,7 +360,7 @@ def create_dataloader(
         shuffle=shuffle,
         num_workers=num_workers,
         pin_memory=pin_memory,
-        drop_last=True,
+        drop_last=drop_last,
     )
 
 

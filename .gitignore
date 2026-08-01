@@ -34,6 +34,8 @@ ENV/
 # ─────────────────────────────────────────────────────
 data_cache/
 *.jsonl
+!evaluation/benchmarks/
+!evaluation/benchmarks/*.jsonl
 *.bin
 *.npy
 *.npz
@@ -97,6 +99,7 @@ wandb/
 runs/
 mlruns/
 tensorboard/
+evaluation/reports/
 
 # ─────────────────────────────────────────────────────
 #  Güvenlik — Asla Commit'lenmesin

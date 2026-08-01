@@ -303,23 +303,23 @@ python3 inference/chat.py \
 
 ## 8. Model Değerlendirme
 
-Modelin kalitesini ölç (perplexity).
+Modelin kalitesini sabit Türkçe seed benchmarklar ve perplexity ile ölç.
 
 ```bash
-python3 evaluation/eval.py \
+python3 evaluation/evaluate_suite.py \
   --checkpoint checkpoints/toprak_best.pt \
-  --eval-data data_cache/clean/eval \
-  --tokenizer toprak_tokenizer.model
+  --tokenizer toprak_tokenizer.model \
+  --perplexity-data data_cache/clean/eval \
+  --output evaluation/reports/toprak_best.json
 ```
 
-### Perplexity ne demek?
+Paket Türkçe dilbilgisi/morfoloji, okuduğunu anlama, genel kültür,
+mantık-matematik, uzun bağlam, toksisite taraması ve sentetik canary ezberleme
+kontrollerini tek JSON raporunda toplar.
 
-| Perplexity | Anlam |
-|---|---|
-| < 50 | ✅ Çok iyi |
-| 50 - 100 | 🟡 İyi, iyi yolda |
-| 100 - 500 | 🟠 Orta, daha fazla eğitim gerekli |
-| > 500 | 🔴 Yetersiz, daha fazla veri ve eğitim gerekli |
+> Perplexity için evrensel “iyi/kötü” eşiği yoktur. Yalnız aynı tokenizer ve
+> aynı eval setiyle üretilen checkpoint raporlarını karşılaştırın. Baseline ve
+> regresyon eşikleri için [EVALUATION.md](EVALUATION.md) dosyasına bakın.
 
 ---
 
@@ -520,7 +520,7 @@ pip install tensorboard "setuptools<82"
        (tamamlandığında toprak_last.pt otomatik kaydedilir)
 
 5. Değerlendirme
-   └── python3 evaluation/eval.py --checkpoint checkpoints/toprak_best.pt --eval-data data_cache/clean/eval
+   └── python3 evaluation/evaluate_suite.py --checkpoint checkpoints/toprak_best.pt --perplexity-data data_cache/clean/eval
 
 6. Metin üretimi ile test et
    └── python3 inference/generate.py --prompt "test"

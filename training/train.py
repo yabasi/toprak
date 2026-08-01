@@ -288,6 +288,7 @@ def main():
                 shuffle=False,
                 num_workers=max(1, args.num_workers // 2),
                 pin_memory=(config.device == "cuda"),
+                drop_last=False,
             )
     else:
         # JSONL mode (geriye uyumlu)
@@ -320,6 +321,7 @@ def main():
                 eval_dataset,
                 batch_size=config.batch_size,
                 shuffle=False,
+                drop_last=False,
             )
 
     # ─────────────────────────────────────────────

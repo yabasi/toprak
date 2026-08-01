@@ -67,7 +67,9 @@ def compute_perplexity(
         total_tokens += non_pad
         num_batches += 1
 
-    avg_loss = total_loss / max(total_tokens, 1)
+    if num_batches == 0 or total_tokens == 0:
+        raise ValueError("Perplexity hesaplamak için eval batch/token bulunamadı")
+    avg_loss = total_loss / total_tokens
     perplexity = math.exp(avg_loss)
 
     return perplexity
@@ -125,6 +127,7 @@ def evaluate_model(
         eval_dataset,
         batch_size=config.batch_size,
         shuffle=False,
+        drop_last=False,
     )
 
     # Perplexity
@@ -132,12 +135,7 @@ def evaluate_model(
 
     print(f"\n{'='*50}")
     print(f"  📊 Perplexity: {ppl:.2f}")
-    if ppl < 50:
-        print(f"  ✅ Hedef perplexity (<50) başarıldı!")
-    elif ppl < 100:
-        print(f"  🟡 İyi yoldasın, devam et.")
-    else:
-        print(f"  🔴 Daha fazla veri ve eğitim gerekli.")
+    print("  Not: Perplexity yalnız aynı tokenizer ve sabit eval setinde karşılaştırılmalıdır.")
     print(f"{'='*50}")
 
     return ppl

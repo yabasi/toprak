@@ -224,13 +224,16 @@ huggingface-cli upload yabasi/toprak-large-v0.1-ckpt \
 ### 4a) Final değerlendirme
 
 ```bash
-python evaluation/eval.py \
+python evaluation/evaluate_suite.py \
   --checkpoint /workspace/checkpoints/toprak_best.pt \
-  --eval-data /workspace/data_bin \
-  --tokenizer /workspace/toprak/toprak_tokenizer.model
+  --tokenizer /workspace/toprak/toprak_tokenizer.model \
+  --perplexity-data /workspace/data_bin \
+  --perplexity-bin-mode \
+  --output /workspace/checkpoints/toprak_best_eval.json
 ```
 
-Hedef perplexity: **<18 (Wiki eval)**, kabul edilebilir <25.
+Sonucu önceki sabit benchmark raporuyla karşılaştır. Perplexity yalnız aynı
+tokenizer ve aynı eval shard'ları kullanıldığında anlamlıdır.
 
 ### 4b) Hızlı sohbet testi (sanity)
 
