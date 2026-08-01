@@ -25,6 +25,11 @@ from utils.validation import (
     setup_error_handler, ToprakError,
 )
 from training.trainer import ToprakTrainer
+from utils.reproducibility import (
+    build_experiment_manifest,
+    seed_everything,
+    write_manifest,
+)
 
 
 def parse_args():
@@ -68,6 +73,15 @@ def parse_args():
         "--experiment-name", type=str, default="default",
         help="Checkpoint ve ablation raporlarında saklanan deney kimliği"
     )
+    parser.add_argument(
+        "--deterministic", action="store_true",
+        help="Deterministik PyTorch algoritmalarını zorunlu kıl"
+    )
+    parser.add_argument(
+        "--data-fingerprint", choices=["auto", "manifest", "full", "metadata", "off"],
+        default="auto",
+        help="Deney manifestindeki veri parmak izi yöntemi (varsayılan: auto)"
+    )
 
     # Checkpoint
     parser.add_argument(
@@ -110,6 +124,10 @@ def parse_args():
     parser.add_argument(
         "--num-workers", type=int, default=2,
         help="DataLoader worker sayısı (bin-mode'da 2-4 önerilir)"
+    )
+    parser.add_argument(
+        "--verify-data-hashes", action="store_true",
+        help="Bin shard SHA-256 değerlerini eğitimden önce doğrula"
     )
 
     # Ünlü Uyumu Loss
@@ -207,6 +225,9 @@ def build_training_recipe(args, config) -> dict:
         "bf16": args.bf16,
         "compile": not args.no_compile,
         "gradient_checkpointing": not args.no_grad_checkpoint,
+        "deterministic": args.deterministic,
+        "data_fingerprint_mode": args.data_fingerprint,
+        "verify_data_hashes": args.verify_data_hashes,
         "auxiliary_losses": {
             "vowel_harmony": {
                 "enabled": args.vowel_harmony,
@@ -243,7 +264,7 @@ def main():
 
     if not args.experiment_name.strip():
         raise ValueError("--experiment-name boş olamaz")
-    torch.manual_seed(args.seed)
+    seed_everything(args.seed, deterministic=args.deterministic)
 
     print("🌱 Toprak — Türkçe Dil Modeli")
     print("=" * 50)
@@ -319,6 +340,7 @@ def main():
             shuffle_shards=False,  # curriculum'u koru
             expected_vocab_size=config.vocab_size,
             seed=args.seed,
+            verify_hashes=args.verify_data_hashes,
         )
         # Eval split aynı bin_dir altında manifest'te tanımlı
         try:
@@ -327,6 +349,7 @@ def main():
                 split="eval",
                 max_seq_len=config.max_seq_len,
                 expected_vocab_size=config.vocab_size,
+                verify_hashes=args.verify_data_hashes,
             )
         except RuntimeError as e:
             print(f"  ⚠ Eval shard'ları yüklenemedi: {e}")
@@ -462,6 +485,22 @@ def main():
     # ─────────────────────────────────────────────
     # 7. Eğitim
     # ─────────────────────────────────────────────
+    training_recipe = build_training_recipe(args, config)
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    print(f"\n🔐 Deney parmak izi hazırlanıyor ({args.data_fingerprint})...")
+    experiment_manifest = build_experiment_manifest(
+        project_root=project_root,
+        training_recipe=training_recipe,
+        tokenizer_path=args.tokenizer,
+        data_path=args.data_dir,
+        data_fingerprint_mode=args.data_fingerprint,
+        argv=sys.argv,
+    )
+    manifest_paths = write_manifest(
+        experiment_manifest, args.checkpoint_dir, args.log_dir
+    )
+    print(f"  ✓ Deney manifesti: {manifest_paths[0]}")
+
     trainer = ToprakTrainer(
         model=model,
         config=config,
@@ -476,7 +515,8 @@ def main():
         consonant_harmony_loss=ch_loss,
         syllable_rhyme_loss=sr_loss,
         use_bf16=args.bf16,
-        training_recipe=build_training_recipe(args, config),
+        training_recipe=training_recipe,
+        experiment_manifest=experiment_manifest,
     )
 
     trainer.train(resume_from=args.resume)

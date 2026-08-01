@@ -181,6 +181,7 @@ class ToprakShardDataset(Dataset):
         dtype: Opsiyonel numpy dtype doğrulaması; asıl dtype manifestten okunur
         shuffle_shards: epoch başında shard'ları karıştır (curriculum'u bozar; default False)
         seed: rng seed
+        verify_hashes: Manifestteki shard SHA-256 değerlerini doğrula
     """
 
     def __init__(
@@ -192,6 +193,7 @@ class ToprakShardDataset(Dataset):
         shuffle_shards: bool = False,
         seed: int = 42,
         expected_vocab_size: Optional[int] = None,
+        verify_hashes: bool = False,
     ):
         manifest_path = os.path.join(bin_dir, "manifest.json")
         if not os.path.exists(manifest_path):
@@ -265,6 +267,20 @@ class ToprakShardDataset(Dataset):
                 raise ValueError(f"Shard yolu bin dizini dışına çıkıyor: {relative_path}")
             if not os.path.exists(path):
                 raise FileNotFoundError(f"Manifestteki shard bulunamadı: {path}")
+            expected_sha256 = entry.get("sha256")
+            if verify_hashes:
+                if not expected_sha256:
+                    raise ValueError(
+                        "Hash doğrulaması istendi fakat shard SHA-256 eksik: "
+                        f"{relative_path}"
+                    )
+                from utils.reproducibility import file_sha256
+                actual_sha256 = file_sha256(path)
+                if actual_sha256 != expected_sha256:
+                    raise ValueError(
+                        f"Shard SHA-256 uyuşmazlığı: {relative_path}; "
+                        f"manifest={expected_sha256}, dosya={actual_sha256}"
+                    )
             if os.path.getsize(path) % manifest_dtype.itemsize != 0:
                 raise ValueError(
                     f"Shard byte boyutu dtype ile uyumsuz: {path} "

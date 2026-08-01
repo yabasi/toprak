@@ -118,6 +118,13 @@ def main():
             "experiment_name"
         ),
         "training_recipe": checkpoint.get("training_recipe"),
+        "data_fingerprint_sha256": checkpoint.get("experiment_manifest", {})
+        .get("data", {})
+        .get("sha256"),
+        "training_git_commit": checkpoint.get("experiment_manifest", {})
+        .get("runtime", {})
+        .get("git", {})
+        .get("commit"),
     }
 
     if args.perplexity_data:

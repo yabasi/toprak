@@ -38,6 +38,16 @@ def validate_ablation_pair(candidate: dict, baseline: dict) -> None:
         "metadata", {}
     ).get("global_step"):
         raise ValueError("Ablation checkpoint adımları uyuşmuyor")
+    candidate_data_hash = candidate.get("metadata", {}).get(
+        "data_fingerprint_sha256"
+    )
+    baseline_data_hash = baseline.get("metadata", {}).get(
+        "data_fingerprint_sha256"
+    )
+    if not candidate_data_hash or not baseline_data_hash:
+        raise ValueError("Ablation için veri parmak izi zorunlu")
+    if candidate_data_hash != baseline_data_hash:
+        raise ValueError("Ablation veri parmak izleri uyuşmuyor")
     if _controlled_recipe(candidate) != _controlled_recipe(baseline):
         raise ValueError(
             "Ablation eğitim tarifleri auxiliary_losses dışında uyuşmuyor"

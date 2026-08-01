@@ -40,6 +40,7 @@ import numpy as np
 from tqdm import tqdm
 
 from model.tokenizer import ToprakTokenizer
+from utils.reproducibility import file_sha256, fingerprint_data
 
 
 DTYPE = np.uint16  # vocab 32000 << 65535
@@ -118,6 +119,7 @@ def tokenize_corpus(
     seed: int = 42,
     curriculum: bool = False,
     high_quality_sources: Tuple[str, ...] = ("wiki",),
+    tokenizer_path: Optional[str] = None,
 ):
     """
     Temizlenmiş JSONL'leri tokenize edip shard'lara yaz.
@@ -131,8 +133,12 @@ def tokenize_corpus(
         seed: rng seed
         curriculum: True ise high_quality_sources (örn. wiki) son shard'lara yazılır
         high_quality_sources: curriculum'da öne çekilmek yerine sona bırakılacak kaynaklar
+        tokenizer_path: Manifestte SHA-256'sı saklanacak tokenizer yolu
     """
     rng = random.Random(seed)
+    input_fingerprint = fingerprint_data(input_dir, mode="full")
+    # Kaynak dizinin makineye özel mutlak yolu manifest hash'ini değiştirmesin.
+    input_fingerprint.pop("path", None)
     bos = tokenizer.bos_token_id
     eos = tokenizer.eos_token_id
 
@@ -194,19 +200,33 @@ def tokenize_corpus(
     train_shards, train_total = train_writer.close()
     eval_shards, eval_total = eval_writer.close()
 
+    def shard_entries(shards):
+        return [
+            {
+                "path": os.path.basename(path),
+                "tokens": tokens,
+                "sha256": file_sha256(path),
+            }
+            for path, tokens in shards
+        ]
+
     manifest = {
+        "format_version": "toprak-shards-v2",
+        "seed": seed,
         "tokenizer_vocab_size": tokenizer.get_vocab_size(),
+        "tokenizer_sha256": file_sha256(tokenizer_path) if tokenizer_path else None,
+        "input_fingerprint": input_fingerprint,
         "dtype": "uint16",
         "shard_size_tokens": shard_size,
         "eval_ratio": eval_ratio,
         "curriculum": curriculum,
         "high_quality_sources": list(high_quality_sources),
         "train": {
-            "shards": [{"path": os.path.basename(p), "tokens": n} for p, n in train_shards],
+            "shards": shard_entries(train_shards),
             "total_tokens": int(train_total),
         },
         "eval": {
-            "shards": [{"path": os.path.basename(p), "tokens": n} for p, n in eval_shards],
+            "shards": shard_entries(eval_shards),
             "total_tokens": int(eval_total),
         },
         "total_docs": total_docs,
@@ -265,6 +285,7 @@ def main():
         seed=args.seed,
         curriculum=args.curriculum,
         high_quality_sources=tuple(args.hq_sources),
+        tokenizer_path=args.tokenizer,
     )
 
 

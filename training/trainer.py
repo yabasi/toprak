@@ -14,16 +14,19 @@ Optimizasyonlar:
 
 import hashlib
 import os
+import random
 import time
 from pathlib import Path
 from typing import Optional
 
 import torch
+import numpy as np
 from torch.optim import AdamW
 
 from model.config import ModelConfig
 from model.transformer import ToprakLM
 from training.scheduler import CosineWarmupScheduler
+from utils.reproducibility import write_manifest
 
 # TensorBoard — opsiyonel
 try:
@@ -63,6 +66,7 @@ class ToprakTrainer:
         syllable_rhyme_loss=None,
         use_bf16: bool = False,
         training_recipe: Optional[dict] = None,
+        experiment_manifest: Optional[dict] = None,
     ):
         self.model = model
         self.config = config
@@ -74,6 +78,10 @@ class ToprakTrainer:
         self.consonant_harmony_loss = consonant_harmony_loss
         self.syllable_rhyme_loss = syllable_rhyme_loss
         self.training_recipe = training_recipe or {}
+        self.experiment_manifest = experiment_manifest or {}
+        self._data_epoch_generator_state = None
+        self._data_batch_in_epoch = 0
+        self._resume_data_state = None
 
         # bf16 yalnız CUDA'da anlamlı; bf16 destekli kart kontrolü
         self.use_bf16 = False
@@ -149,6 +157,77 @@ class ToprakTrainer:
 
         # Device
         self.device = config.device
+
+    def _capture_rng_state(self) -> dict:
+        state = {
+            "python": random.getstate(),
+            "numpy": np.random.get_state(),
+            "torch": torch.get_rng_state(),
+        }
+        if torch.cuda.is_available():
+            state["cuda"] = torch.cuda.get_rng_state_all()
+        return state
+
+    def _restore_rng_state(self, state: Optional[dict]) -> None:
+        if not state:
+            return
+        random.setstate(state["python"])
+        np.random.set_state(state["numpy"])
+        torch.set_rng_state(state["torch"])
+        if "cuda" in state and torch.cuda.is_available():
+            torch.cuda.set_rng_state_all(state["cuda"])
+
+    def _capture_data_state(self) -> dict:
+        generator_state = self._data_epoch_generator_state
+        if isinstance(generator_state, torch.Tensor):
+            generator_state = generator_state.clone()
+        return {
+            "epoch_generator_state": generator_state,
+            "batch_in_epoch": self._data_batch_in_epoch,
+        }
+
+    def _create_data_iterator(self):
+        """Aynı epoch permütasyonunu ve batch cursor'unu yeniden kur."""
+        generator = getattr(self.train_dataloader, "generator", None)
+        resume_state = self._resume_data_state
+        if resume_state:
+            epoch_state = resume_state.get("epoch_generator_state")
+            batch_in_epoch = int(resume_state.get("batch_in_epoch", 0))
+            if epoch_state is not None:
+                if generator is None:
+                    raise RuntimeError(
+                        "Checkpoint veri cursor'u için seed'li DataLoader generator gerekli"
+                    )
+                generator.set_state(epoch_state)
+            self._data_epoch_generator_state = (
+                epoch_state.clone() if isinstance(epoch_state, torch.Tensor) else epoch_state
+            )
+            data_iter = iter(self.train_dataloader)
+            for _ in range(batch_in_epoch):
+                try:
+                    next(data_iter)
+                except StopIteration as exc:
+                    raise RuntimeError(
+                        "Checkpoint batch cursor'u DataLoader uzunluğunu aşıyor"
+                    ) from exc
+            self._data_batch_in_epoch = batch_in_epoch
+            self._resume_data_state = None
+            return data_iter
+
+        self._data_epoch_generator_state = (
+            generator.get_state().clone() if generator is not None else None
+        )
+        self._data_batch_in_epoch = 0
+        return iter(self.train_dataloader)
+
+    def _next_training_batch(self, data_iter):
+        try:
+            batch = next(data_iter)
+        except StopIteration:
+            data_iter = self._create_data_iterator()
+            batch = next(data_iter)
+        self._data_batch_in_epoch += 1
+        return batch, data_iter
 
     def train(self, resume_from: Optional[str] = None):
         """
@@ -235,20 +314,22 @@ class ToprakTrainer:
         tokens_processed = 0
         nan_in_batch = False
 
-        data_iter = iter(self.train_dataloader)
+        data_iter = self._create_data_iterator()
+        step_rng_state = self._capture_rng_state()
+        step_data_state = self._capture_data_state()
 
         try:
             while self.global_step < self.config.max_steps:
+                # Kesinti optimizer adımının ortasında olursa son tamamlanmış
+                # adımın RNG/veri cursor'una geri dönülebilsin.
+                step_rng_state = self._capture_rng_state()
+                step_data_state = self._capture_data_state()
                 self.optimizer.zero_grad()
 
                 # Gradient accumulation
                 nan_in_batch = False
                 for micro_step in range(self.config.grad_accum_steps):
-                    try:
-                        batch = next(data_iter)
-                    except StopIteration:
-                        data_iter = iter(self.train_dataloader)
-                        batch = next(data_iter)
+                    batch, data_iter = self._next_training_batch(data_iter)
 
                     input_ids = batch["input_ids"].to(self.device)
                     labels = batch["labels"].to(self.device)
@@ -457,7 +538,11 @@ class ToprakTrainer:
             print(f"🛑 Eğitim kullanıcı tarafından durduruldu (Ctrl+C)")
             print(f"  Son step: {self.global_step}")
             print(f"  💾 Son checkpoint kaydediliyor...")
-            self.save_checkpoint()
+            self.optimizer.zero_grad()
+            self.save_checkpoint(
+                rng_state=step_rng_state,
+                data_state=step_data_state,
+            )
             print(f"  ✓ Güvenli çıkış yapıldı.")
             print(f"  📌 Devam etmek için:")
             print(f"     --resume checkpoints/toprak_step_{self.global_step}.pt")
@@ -506,7 +591,12 @@ class ToprakTrainer:
 
         return total_loss / max(num_batches, 1)
 
-    def save_checkpoint(self, tag: Optional[str] = None):
+    def save_checkpoint(
+        self,
+        tag: Optional[str] = None,
+        rng_state: Optional[dict] = None,
+        data_state: Optional[dict] = None,
+    ):
         """Checkpoint kaydet."""
         if tag:
             filename = f"toprak_{tag}.pt"
@@ -528,6 +618,9 @@ class ToprakTrainer:
             "global_step": self.global_step,
             "best_eval_loss": self.best_eval_loss,
             "training_recipe": self.training_recipe,
+            "experiment_manifest": self.experiment_manifest,
+            "rng_state": rng_state or self._capture_rng_state(),
+            "data_state": data_state or self._capture_data_state(),
             "config": {
                 "vocab_size": self.config.vocab_size,
                 "d_model": self.config.d_model,
@@ -560,6 +653,12 @@ class ToprakTrainer:
             "resume_global_step": checkpoint.get("global_step"),
             "resume_scheduler_state": checkpoint.get("scheduler_state_dict"),
         })
+        if self.experiment_manifest:
+            self.experiment_manifest["training_recipe"] = self.training_recipe
+            manifest_dirs = [self.checkpoint_dir]
+            if self.writer is not None:
+                manifest_dirs.append(self.writer.log_dir)
+            write_manifest(self.experiment_manifest, *manifest_dirs)
 
         # torch.compile model'e yükleme
         model_to_load = self.model
@@ -581,6 +680,8 @@ class ToprakTrainer:
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         self.global_step = checkpoint["global_step"]
         self.best_eval_loss = checkpoint.get("best_eval_loss", float("inf"))
+        self._resume_data_state = checkpoint.get("data_state")
+        self._restore_rng_state(checkpoint.get("rng_state"))
 
     def _cleanup_checkpoints(self):
         """Eski checkpoint'leri sil (son N tanesini tut)."""

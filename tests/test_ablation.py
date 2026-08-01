@@ -58,6 +58,7 @@ def make_report(name="baseline", scores=(0.0, 1.0), seed=42):
             "benchmark_sha256": {"seed.jsonl": "benchmark"},
             "model_config": {"d_model": 16},
             "global_step": 100,
+            "data_fingerprint_sha256": "data",
             "training_recipe": {
                 "experiment_name": name,
                 "data_dir": "/data",
@@ -104,6 +105,8 @@ class TestAblation(unittest.TestCase):
                 weights_only=False,
             )
         self.assertEqual(checkpoint["training_recipe"], recipe)
+        self.assertIn("rng_state", checkpoint)
+        self.assertIn("data_state", checkpoint)
 
     def test_seeded_dataloader_order_is_repeatable(self):
         dataset = TensorDataset(torch.arange(20))
@@ -154,6 +157,13 @@ class TestAblation(unittest.TestCase):
         candidate = copy.deepcopy(make_report("vowel"))
         candidate["metadata"]["global_step"] = 101
         with self.assertRaisesRegex(ValueError, "adımları"):
+            validate_ablation_pair(candidate, baseline)
+
+    def test_data_fingerprint_mismatch_is_rejected(self):
+        baseline = make_report()
+        candidate = copy.deepcopy(make_report("vowel"))
+        candidate["metadata"]["data_fingerprint_sha256"] = "changed"
+        with self.assertRaisesRegex(ValueError, "veri parmak"):
             validate_ablation_pair(candidate, baseline)
 
 

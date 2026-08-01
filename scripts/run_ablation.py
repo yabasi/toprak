@@ -78,6 +78,11 @@ def build_commands(args, project_root: str):
         common_train.append("--no-grad-checkpoint")
     if args.bf16:
         common_train.append("--bf16")
+    if args.deterministic:
+        common_train.append("--deterministic")
+    if args.verify_data_hashes:
+        common_train.append("--verify-data-hashes")
+    common_train += ["--data-fingerprint", args.data_fingerprint]
 
     for name in variants:
         checkpoint_dir = os.path.join(output_root, "checkpoints", name)
@@ -140,6 +145,13 @@ def parse_args():
     parser.add_argument("--no-compile", action="store_true")
     parser.add_argument("--no-grad-checkpoint", action="store_true")
     parser.add_argument("--bf16", action="store_true")
+    parser.add_argument("--deterministic", action="store_true")
+    parser.add_argument("--verify-data-hashes", action="store_true")
+    parser.add_argument(
+        "--data-fingerprint",
+        choices=["auto", "manifest", "full", "metadata", "off"],
+        default="auto",
+    )
     parser.add_argument(
         "--variants", nargs="+", choices=sorted(VARIANTS),
         default=[name for name in VARIANTS if name != "baseline"],

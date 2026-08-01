@@ -10,6 +10,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.dataset import ToprakShardDataset, create_dataloader
+from utils.reproducibility import file_sha256
 
 
 def test_shard_dataset_basic():
@@ -130,6 +131,28 @@ class TestShardManifestValidation(unittest.TestCase):
             batches = list(loader)
             self.assertEqual(len(batches), 1)
             self.assertEqual(batches[0]["input_ids"].shape[0], 2)
+
+    def test_optional_shard_hash_validation(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_fixture(d)
+            manifest_path = os.path.join(d, "manifest.json")
+            shard_path = os.path.join(d, "train_00000.bin")
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            manifest["train"]["shards"][0]["sha256"] = file_sha256(shard_path)
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f)
+            ToprakShardDataset(
+                d, split="train", max_seq_len=100, verify_hashes=True
+            )
+
+            manifest["train"]["shards"][0]["sha256"] = "0" * 64
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f)
+            with self.assertRaisesRegex(ValueError, "SHA-256 uyuşmazlığı"):
+                ToprakShardDataset(
+                    d, split="train", max_seq_len=100, verify_hashes=True
+                )
 
 
 if __name__ == "__main__":

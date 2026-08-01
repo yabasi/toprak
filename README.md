@@ -36,7 +36,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
-> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md) — Kurulum, eğitim, inference, parametreler ve sık sorulan sorular. Yardımcı kayıpların kontrollü ölçümü için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md) dosyasına bakın.
+> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md). Yardımcı kayıplar için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md), deney tekrarları için [REPRODUCIBILITY.md](REPRODUCIBILITY.md) dosyasına bakın.
 
 ---
 
@@ -178,6 +178,7 @@ toprak/
 ├── EVALUATION.md                 #    Eval görevleri, metrikler ve rapor şeması
 ├── ABLATION.md                   #    Yardımcı loss katkı ölçüm protokolü
 ├── TOKENIZER_ANALYSIS.md         #    Tokenizer ölçüm ve karşılaştırma rehberi
+├── REPRODUCIBILITY.md            #    Seed, manifest ve exact-resume protokolü
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```
@@ -450,6 +451,8 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 - **Gradient Accumulation**: Küçük batch ile büyük efektif batch simülasyonu
 - **Gradient Clipping**: Max norm 1.0
 - **Checkpoint Strategy**: Her 5000 adımda kaydet, son 3'ü tut
+- **Exact Resume**: RNG, DataLoader epoch/cursor, optimizer ve scheduler durumu checkpoint'te
+- **Deney Manifesti**: Git/ortam sürümleri, tokenizer ve veri SHA-256 parmak izi
 - **TensorBoard**: Loss, LR, tokens/s, grad norm, eval perplexity takibi
 - **Döküman Karıştırma**: Epoch başı döküman seviyesinde shuffle
 - **Dropout**: 0.0 (modern modellerde dropout kullanılmıyor)

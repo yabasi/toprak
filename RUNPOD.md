@@ -290,6 +290,12 @@ A100 pod'u **DURDUR**. Volume'da ckpt + model + veri kalır (~$0.67/gün storage
 | Loss plateauı | LR'yi yarıya indir veya warmup'u uzat |
 | NaN loss | `--no-compile` dene; `--lr 1e-4`'e düşür |
 
+Tekrarlanabilir bir CUDA çalışması için komuta
+`--seed 42 --deterministic --data-fingerprint manifest --verify-data-hashes`
+ekleyin. Yeni pretokenized
+shard manifestleri içerik SHA-256 değerlerini taşır; ayrıntılar için
+`REPRODUCIBILITY.md` dosyasına bakın.
+
 ---
 
 ## 💰 Maliyet Tasarruf Checklist

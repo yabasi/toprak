@@ -99,6 +99,9 @@ python3 training/train.py \
   --warmup-steps 5000 \
   --grad-accum 4 \
   --save-every 5000 \
+  --seed 42 \
+  --deterministic \
+  --data-fingerprint auto \
   --checkpoint-dir checkpoints \
   --log-dir logs
 ```
@@ -189,6 +192,11 @@ python3 training/train.py --model-size small --device cpu
 ## 4. Eğitime Devam Etme
 
 Eğitim yarıda kaldıysa veya daha fazla adım eklemek istersen:
+
+Yeni checkpointler RNG ve DataLoader batch cursor'unu da saklar; aynı ortam ve
+deterministik ayarlarla resume edilen eğitim kesintisiz veri sırasını sürdürür.
+Ayrıntılar ve donanım sınırları için [REPRODUCIBILITY.md](REPRODUCIBILITY.md)
+dosyasına bakın.
 
 ```bash
 # Son checkpoint'ten devam et
@@ -408,6 +416,9 @@ python3 upload/push_to_hub.py \
 | `--save-every` | 5000 | Kaç adımda bir checkpoint kaydet |
 | `--seed` | 42 | Model başlangıcı ve DataLoader sırası |
 | `--experiment-name` | default | Checkpoint'e yazılan deney kimliği |
+| `--deterministic` | Kapalı | Deterministik PyTorch algoritmalarını zorunlu kıl |
+| `--data-fingerprint` | auto | Veri içerik/manifest parmak izi yöntemi |
+| `--verify-data-hashes` | Kapalı | Bin shard SHA-256 değerlerini doğrula |
 | `--resume` | *(yok)* | Devam edilecek checkpoint |
 | `--checkpoint-dir` | checkpoints | Checkpoint kayıt dizini |
 | `--device` | otomatik | mps, cuda veya cpu |
