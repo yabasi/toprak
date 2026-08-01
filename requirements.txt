@@ -22,6 +22,8 @@ tqdm>=4.65.0
 numpy>=1.24.0
 tensorboard>=2.14.0
 setuptools>=69.0.0,<82        # Python 3.14+ (TensorBoard pkg_resources bağımlılığı)
+zstandard>=0.22.0             # FineWeb-2 / CulturaX parquet okuma için
+pyarrow>=14.0.0               # HuggingFace datasets streaming için
 
 # Apple Silicon
 mlx>=0.1.0

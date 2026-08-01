@@ -18,7 +18,7 @@ import torch
 from model.config import ModelConfig, CONFIGS, detect_device
 from model.transformer import ToprakLM
 from model.tokenizer import ToprakTokenizer
-from data.dataset import ToprakDataset, create_dataloader
+from data.dataset import ToprakDataset, ToprakShardDataset, create_dataloader
 from utils.validation import (
     validate_tokenizer, validate_dir_has_data,
     validate_checkpoint, validate_dataset_size,
@@ -90,6 +90,18 @@ def parse_args():
     parser.add_argument(
         "--log-dir", type=str, default="logs",
         help="TensorBoard log dizini"
+    )
+    parser.add_argument(
+        "--bin-mode", action="store_true",
+        help="Pre-tokenize edilmiş .bin shard'larını kullan (data-dir manifest.json içermeli)"
+    )
+    parser.add_argument(
+        "--bf16", action="store_true",
+        help="CUDA üzerinde bfloat16 mixed precision kullan (A100/H100 önerilir; fp16 yerine)"
+    )
+    parser.add_argument(
+        "--num-workers", type=int, default=2,
+        help="DataLoader worker sayısı (bin-mode'da 2-4 önerilir)"
     )
 
     # Ünlü Uyumu Loss
@@ -226,37 +238,81 @@ def main():
     # ─────────────────────────────────────────────
     # 3. Dataset — veri kontrolü
     # ─────────────────────────────────────────────
-    validate_dir_has_data(args.data_dir, description="Eğitim verisi dizini")
     print(f"\n📦 Veri yükleniyor: {args.data_dir}")
-    train_dataset = ToprakDataset(
-        data_dir=args.data_dir,
-        tokenizer=tokenizer,
-        max_seq_len=config.max_seq_len,
-        split="train",
-    )
-    validate_dataset_size(train_dataset, min_blocks=1, description="Eğitim verisi")
 
-    train_loader = create_dataloader(
-        train_dataset,
-        batch_size=config.batch_size,
-        shuffle=True,
-    )
+    if args.bin_mode:
+        # Pre-tokenized shard mode (önerilir, büyük korpuslar için)
+        if not os.path.exists(os.path.join(args.data_dir, "manifest.json")):
+            raise FileNotFoundError(
+                f"--bin-mode için {args.data_dir}/manifest.json gerekli. "
+                f"Önce: python scripts/pretokenize.py --input-dir <jsonl_dir> "
+                f"--tokenizer {args.tokenizer} --output-dir {args.data_dir}"
+            )
+        train_dataset = ToprakShardDataset(
+            bin_dir=args.data_dir,
+            split="train",
+            max_seq_len=config.max_seq_len,
+            shuffle_shards=False,  # curriculum'u koru
+        )
+        # Eval split aynı bin_dir altında manifest'te tanımlı
+        try:
+            eval_dataset = ToprakShardDataset(
+                bin_dir=args.data_dir,
+                split="eval",
+                max_seq_len=config.max_seq_len,
+            )
+        except Exception as e:
+            print(f"  ⚠ Eval shard'ları yüklenemedi: {e}")
+            eval_dataset = None
 
-    eval_loader = None
-    if args.eval_data_dir:
-        validate_dir_has_data(args.eval_data_dir, description="Eval verisi dizini")
-        eval_dataset = ToprakDataset(
-            data_dir=args.eval_data_dir,
+        train_loader = create_dataloader(
+            train_dataset,
+            batch_size=config.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers,
+            pin_memory=(config.device == "cuda"),
+        )
+        eval_loader = None
+        if eval_dataset is not None:
+            eval_loader = create_dataloader(
+                eval_dataset,
+                batch_size=config.batch_size,
+                shuffle=False,
+                num_workers=max(1, args.num_workers // 2),
+                pin_memory=(config.device == "cuda"),
+            )
+    else:
+        # JSONL mode (geriye uyumlu)
+        validate_dir_has_data(args.data_dir, description="Eğitim verisi dizini")
+        train_dataset = ToprakDataset(
+            data_dir=args.data_dir,
             tokenizer=tokenizer,
             max_seq_len=config.max_seq_len,
-            split="eval",
-            shuffle_docs=False,
+            split="train",
         )
-        eval_loader = create_dataloader(
-            eval_dataset,
+        validate_dataset_size(train_dataset, min_blocks=1, description="Eğitim verisi")
+
+        train_loader = create_dataloader(
+            train_dataset,
             batch_size=config.batch_size,
-            shuffle=False,
+            shuffle=True,
         )
+
+        eval_loader = None
+        if args.eval_data_dir:
+            validate_dir_has_data(args.eval_data_dir, description="Eval verisi dizini")
+            eval_dataset = ToprakDataset(
+                data_dir=args.eval_data_dir,
+                tokenizer=tokenizer,
+                max_seq_len=config.max_seq_len,
+                split="eval",
+                shuffle_docs=False,
+            )
+            eval_loader = create_dataloader(
+                eval_dataset,
+                batch_size=config.batch_size,
+                shuffle=False,
+            )
 
     # ─────────────────────────────────────────────
     # 4. Resume checkpoint kontrolü
@@ -339,6 +395,7 @@ def main():
         morph_weight_loss=morph_loss,
         consonant_harmony_loss=ch_loss,
         syllable_rhyme_loss=sr_loss,
+        use_bf16=args.bf16,
     )
 
     trainer.train(resume_from=args.resume)

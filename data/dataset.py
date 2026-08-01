@@ -6,6 +6,7 @@ import os
 import random
 from typing import List, Optional
 
+import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
@@ -135,18 +136,14 @@ class ToprakPreTokenizedDataset(Dataset):
 
     Büyük veri setleri için: veriyi önceden tokenize edip .bin dosyasına kaydet,
     ardından memory-mapped olarak yükle.
+
+    Eski versiyon (geriye uyumlu) — int32, tek dosya.
+    Yeni multi-shard + uint16 desteği için: ToprakShardDataset
     """
 
-    def __init__(self, bin_file: str, max_seq_len: int = 512):
-        """
-        Args:
-            bin_file: Tokenize edilmiş veri (.bin dosyası, int32 numpy array)
-            max_seq_len: Maksimum sequence uzunluğu
-        """
-        import numpy as np
-
+    def __init__(self, bin_file: str, max_seq_len: int = 512, dtype=np.int32):
         self.max_seq_len = max_seq_len
-        self.data = np.memmap(bin_file, dtype=np.int32, mode="r")
+        self.data = np.memmap(bin_file, dtype=dtype, mode="r")
         print(f"Pre-tokenized veri yüklendi: {len(self.data):,} token")
 
     def __len__(self) -> int:
@@ -156,10 +153,143 @@ class ToprakPreTokenizedDataset(Dataset):
         start = idx * self.max_seq_len
         end = start + self.max_seq_len + 1
 
-        chunk = self.data[start:end].astype(int)
-        x = torch.tensor(chunk[:-1], dtype=torch.long)
-        y = torch.tensor(chunk[1:], dtype=torch.long)
+        chunk = self.data[start:end].astype(np.int64)
+        x = torch.from_numpy(chunk[:-1]).long()
+        y = torch.from_numpy(chunk[1:]).long()
+        return {"input_ids": x, "labels": y}
 
+
+class ToprakShardDataset(Dataset):
+    """
+    Manifest tabanlı, çoklu .bin shard'ı tek bir lojik dataset olarak sunar.
+
+    `scripts/pretokenize.py` tarafından üretilen format:
+        data_bin/
+            manifest.json
+            train_00000.bin
+            train_00001.bin
+            ...
+            eval_00000.bin
+
+    Tüm shard'lar memory-mapped (numpy memmap) → RAM tüketmez.
+    Global index → (shard, lokal offset) mapping ile O(1) blok erişimi.
+
+    Args:
+        bin_dir: shard dizini (manifest.json içermeli)
+        split: "train" veya "eval"
+        max_seq_len: blok uzunluğu (eğitim seq_len ile eşleşmeli)
+        dtype: numpy dtype (varsayılan uint16)
+        shuffle_shards: epoch başında shard'ları karıştır (curriculum'u bozar; default False)
+        seed: rng seed
+    """
+
+    def __init__(
+        self,
+        bin_dir: str,
+        split: str = "train",
+        max_seq_len: int = 2048,
+        dtype=np.uint16,
+        shuffle_shards: bool = False,
+        seed: int = 42,
+    ):
+        manifest_path = os.path.join(bin_dir, "manifest.json")
+        if not os.path.exists(manifest_path):
+            raise FileNotFoundError(
+                f"Manifest bulunamadı: {manifest_path}. "
+                f"Önce scripts/pretokenize.py çalıştırın."
+            )
+
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+
+        if split not in ("train", "eval"):
+            raise ValueError(f"split 'train' veya 'eval' olmalı, '{split}' verildi")
+
+        meta = manifest[split]
+        self.split = split
+        self.max_seq_len = max_seq_len
+        self.dtype = dtype
+        self.bin_dir = bin_dir
+
+        # Shard'ları yükle (memmap)
+        shard_entries = meta["shards"]
+        if shuffle_shards and split == "train":
+            rng = random.Random(seed)
+            rng.shuffle(shard_entries)
+
+        self.shards: List[np.memmap] = []
+        self.shard_paths: List[str] = []
+        # Her shard'ın "kullanılabilir blok sayısı" (son artık atılır)
+        self.shard_blocks: List[int] = []
+        # Kümülatif blok sayısı — binary search ile global→lokal index
+        self.cum_blocks: List[int] = []
+        running = 0
+        skipped_shards = 0
+
+        for entry in shard_entries:
+            path = os.path.join(bin_dir, entry["path"])
+            if not os.path.exists(path):
+                print(f"  ⚠ Shard atlandı (bulunamadı): {path}")
+                skipped_shards += 1
+                continue
+            arr = np.memmap(path, dtype=dtype, mode="r")
+            n_tokens = len(arr)
+            # Bir blok = max_seq_len + 1 token (input + 1 kaydırılmış label)
+            n_blocks = max(0, (n_tokens - 1) // max_seq_len)
+            if n_blocks == 0:
+                skipped_shards += 1
+                continue
+            self.shards.append(arr)
+            self.shard_paths.append(path)
+            self.shard_blocks.append(n_blocks)
+            running += n_blocks
+            self.cum_blocks.append(running)
+
+        if not self.shards:
+            raise RuntimeError(
+                f"Hiç kullanılabilir shard bulunamadı ({bin_dir}, split={split})"
+            )
+
+        self.total_tokens = int(sum(len(s) for s in self.shards))
+        self.total_blocks = running
+
+        print(
+            f"📦 ToprakShardDataset[{split}] "
+            f"hazır: {len(self.shards)} shard, "
+            f"{self.total_tokens:,} token, {self.total_blocks:,} blok "
+            f"(seq_len={max_seq_len})"
+        )
+        if skipped_shards:
+            print(f"   ⚠ {skipped_shards} shard atlandı")
+
+    def __len__(self) -> int:
+        return self.total_blocks
+
+    def _locate(self, global_idx: int) -> tuple:
+        """Global block index → (shard_idx, local_block_idx)"""
+        # cum_blocks artan; bisect_right uygun.
+        import bisect
+        shard_idx = bisect.bisect_right(self.cum_blocks, global_idx)
+        if shard_idx == 0:
+            local_block = global_idx
+        else:
+            local_block = global_idx - self.cum_blocks[shard_idx - 1]
+        return shard_idx, local_block
+
+    def __getitem__(self, idx: int) -> dict:
+        if idx < 0 or idx >= self.total_blocks:
+            raise IndexError(idx)
+        shard_idx, local_block = self._locate(idx)
+        arr = self.shards[shard_idx]
+        start = local_block * self.max_seq_len
+        end = start + self.max_seq_len + 1
+        chunk = np.asarray(arr[start:end], dtype=np.int64)
+        # Edge case: son blok shard sonunda 1 eksik kalabilir
+        if len(chunk) < self.max_seq_len + 1:
+            pad_n = (self.max_seq_len + 1) - len(chunk)
+            chunk = np.concatenate([chunk, np.zeros(pad_n, dtype=np.int64)])
+        x = torch.from_numpy(chunk[:-1]).long()
+        y = torch.from_numpy(chunk[1:]).long()
         return {"input_ids": x, "labels": y}
 
 

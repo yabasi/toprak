@@ -61,6 +61,7 @@ class ToprakTrainer:
         morph_weight_loss=None,
         consonant_harmony_loss=None,
         syllable_rhyme_loss=None,
+        use_bf16: bool = False,
     ):
         self.model = model
         self.config = config
@@ -71,6 +72,15 @@ class ToprakTrainer:
         self.morph_weight_loss = morph_weight_loss
         self.consonant_harmony_loss = consonant_harmony_loss
         self.syllable_rhyme_loss = syllable_rhyme_loss
+
+        # bf16 yalnız CUDA'da anlamlı; bf16 destekli kart kontrolü
+        self.use_bf16 = False
+        if use_bf16:
+            if config.device == "cuda" and torch.cuda.is_bf16_supported():
+                self.use_bf16 = True
+                print("  ✓ bfloat16 mixed precision aktif (CUDA)")
+            else:
+                print("  ⚠ --bf16 istendi ama desteklenmiyor (cihaz/cuda kontrolü), fp16'ya düşülüyor")
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -233,10 +243,11 @@ class ToprakTrainer:
                     # NOT: MPS'de bfloat16 autocast, RoPE complex tensor
                     # işlemleriyle uyumsuz ve nan üretiyor. MPS zaten kendi
                     # optimizasyonlarını yapıyor, bu yüzden float32 kullanıyoruz.
+                    amp_dtype = torch.bfloat16 if self.use_bf16 else torch.float16
                     if self.morph_weight_loss is not None:
                         # Morfolojik ağırlıklı kayıp — CE loss'u ayrı hesapla
                         if self.device == "cuda":
-                            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            with torch.autocast(device_type="cuda", dtype=amp_dtype):
                                 logits, _, _ = self.model(input_ids)
                                 loss = self.morph_weight_loss(logits, labels, self.global_step)
                         else:
@@ -244,7 +255,7 @@ class ToprakTrainer:
                             loss = self.morph_weight_loss(logits, labels, self.global_step)
                     else:
                         if self.device == "cuda":
-                            with torch.autocast(device_type="cuda", dtype=torch.float16):
+                            with torch.autocast(device_type="cuda", dtype=amp_dtype):
                                 logits, loss, _ = self.model(input_ids, targets=labels)
                         else:
                             # MPS ve CPU — float32 (MPS autocast nan üretiyor)
@@ -455,11 +466,16 @@ class ToprakTrainer:
         total_loss = 0.0
         num_batches = 0
 
+        amp_dtype = torch.bfloat16 if self.use_bf16 else torch.float16
         for batch in self.eval_dataloader:
             input_ids = batch["input_ids"].to(self.device)
             labels = batch["labels"].to(self.device)
 
-            _, loss, _ = self.model(input_ids, targets=labels)
+            if self.device == "cuda":
+                with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                    _, loss, _ = self.model(input_ids, targets=labels)
+            else:
+                _, loss, _ = self.model(input_ids, targets=labels)
             total_loss += loss.item()
             num_batches += 1
 
