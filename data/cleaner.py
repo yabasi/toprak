@@ -10,8 +10,21 @@ import hashlib
 import json
 import os
 import re
+import sys
 import unicodedata
 from typing import List, Optional
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from data.governance import (
+    SCHEMA_VERSION,
+    ContaminationDetector,
+    NearDuplicateIndex,
+    PIIRedactor,
+    QualityScorer,
+    enrich_document,
+    utc_now_iso,
+)
 
 
 class ToprakCleaner:
@@ -23,20 +36,51 @@ class ToprakCleaner:
     2. Unicode normalizasyonu (NFKC)
     3. Boilerplate filtre
     4. Minimum kelime sayısı kontrolü
-    5. Deduplication (hash-based)
+    5. PII redaction
+    6. Açıklanabilir kalite skoru
+    7. Exact + near deduplication
+    8. Benchmark contamination kontrolü
+    9. Kaynak/lisans provenance metadata'sı
     """
 
-    def __init__(self, min_words: int = 50, max_words: int = 100_000):
+    def __init__(
+        self,
+        min_words: int = 50,
+        max_words: int = 100_000,
+        quality_threshold: float = 0.50,
+        near_duplicate_distance: int = 3,
+        redact_pii: bool = True,
+        benchmark_path: Optional[str] = None,
+        contamination_action: str = "reject",
+    ):
+        if contamination_action not in ("reject", "flag"):
+            raise ValueError("contamination_action 'reject' veya 'flag' olmalı")
         self.min_words = min_words
         self.max_words = max_words
-        self.seen_hashes: set = set()
+        self.quality_threshold = quality_threshold
+        self.redact_pii = redact_pii
+        self.contamination_action = contamination_action
+        self.quality_scorer = QualityScorer()
+        self.pii_redactor = PIIRedactor()
+        self.dedup_index = NearDuplicateIndex(near_duplicate_distance)
+        self.contamination_detector = (
+            ContaminationDetector(benchmark_path) if benchmark_path else None
+        )
+        self.last_analysis = {}
+        self.source_counts = {}
+        self.license_status_counts = {}
         self.stats = {
             "total": 0,
             "accepted": 0,
             "too_short": 0,
             "too_long": 0,
             "duplicate": 0,
+            "exact_duplicate": 0,
+            "near_duplicate": 0,
             "bad_quality": 0,
+            "pii_documents": 0,
+            "pii_redactions": 0,
+            "contaminated": 0,
         }
 
     def normalize_unicode(self, text: str) -> str:
@@ -87,36 +131,18 @@ class ToprakCleaner:
 
     def is_quality_text(self, text: str) -> bool:
         """Metin kalitesini kontrol et."""
-        words = text.split()
-        if len(words) == 0:
-            return False
-
-        # Çok fazla özel karakter
-        alpha_ratio = sum(1 for c in text if c.isalpha()) / max(len(text), 1)
-        if alpha_ratio < 0.5:
-            return False
-
-        # Çok fazla tekrar eden kelime
-        unique_words = set(w.lower() for w in words)
-        if len(unique_words) / len(words) < 0.1:
-            return False
-
-        # Ortalama kelime uzunluğu kontrolü
-        avg_word_len = sum(len(w) for w in words) / len(words)
-        if avg_word_len < 2 or avg_word_len > 25:
-            return False
-
-        return True
-
-    def get_text_hash(self, text: str) -> str:
-        """Metin hash'i oluştur (dedup için)."""
-        # Boşlukları normalize et ve küçük harfe dönüştür
-        normalized = re.sub(r"\s+", " ", text.lower().strip())
-        return hashlib.md5(normalized.encode("utf-8")).hexdigest()
+        score, signals = self.quality_scorer.score(text)
+        return (
+            score >= self.quality_threshold
+            and signals.get("alpha_ratio", 0.0) >= 0.5
+            and signals.get("unique_word_ratio", 0.0) >= 0.1
+            and 2 <= signals.get("average_word_length", 0.0) <= 25
+        )
 
     def clean_text(self, text: str) -> Optional[str]:
         """Tek bir metni temizle."""
         self.stats["total"] += 1
+        self.last_analysis = {}
 
         # 1. HTML artıkları
         text = self.remove_html_artifacts(text)
@@ -130,7 +156,15 @@ class ToprakCleaner:
         # 4. Boşluk temizliği
         text = self.clean_whitespace(text)
 
-        # 5. Kelime sayısı kontrolü
+        # 5. Yüksek kesinlikli PII redaction
+        pii_redactions = {}
+        if self.redact_pii:
+            text, pii_redactions = self.pii_redactor.redact(text)
+            if pii_redactions:
+                self.stats["pii_documents"] += 1
+                self.stats["pii_redactions"] += sum(pii_redactions.values())
+
+        # 6. Kelime sayısı kontrolü
         word_count = len(text.split())
         if word_count < self.min_words:
             self.stats["too_short"] += 1
@@ -139,20 +173,68 @@ class ToprakCleaner:
             self.stats["too_long"] += 1
             return None
 
-        # 6. Kalite kontrolü
-        if not self.is_quality_text(text):
+        # 7. Kalite kontrolü ve açıklanabilir skor
+        quality_score, quality_signals = self.quality_scorer.score(text)
+        if not (
+            quality_score >= self.quality_threshold
+            and quality_signals.get("alpha_ratio", 0.0) >= 0.5
+            and quality_signals.get("unique_word_ratio", 0.0) >= 0.1
+            and 2 <= quality_signals.get("average_word_length", 0.0) <= 25
+        ):
             self.stats["bad_quality"] += 1
             return None
 
-        # 7. Dedup
-        text_hash = self.get_text_hash(text)
-        if text_hash in self.seen_hashes:
+        # 8. Benchmark contamination
+        contamination_matches = []
+        if self.contamination_detector is not None:
+            contamination_matches = self.contamination_detector.find_matches(text)
+            if contamination_matches:
+                self.stats["contaminated"] += 1
+                if self.contamination_action == "reject":
+                    return None
+
+        # 9. Exact + SimHash near dedup
+        is_duplicate, duplicate_type, text_hash, simhash = (
+            self.dedup_index.check_and_add(text)
+        )
+        if is_duplicate:
             self.stats["duplicate"] += 1
+            self.stats[f"{duplicate_type}_duplicate"] += 1
             return None
-        self.seen_hashes.add(text_hash)
+
+        self.last_analysis = {
+            "quality_score": quality_score,
+            "quality_signals": quality_signals,
+            "pii_redactions": pii_redactions,
+            "content_hash": text_hash,
+            "simhash": simhash,
+            "contamination_matches": contamination_matches,
+        }
 
         self.stats["accepted"] += 1
         return text
+
+    def clean_document(self, document: dict, source_file: Optional[str] = None) -> Optional[dict]:
+        """Dokümanı temizle ve standart yönetişim metadata'sıyla zenginleştir."""
+        cleaned = self.clean_text(document.get("text", ""))
+        if cleaned is None:
+            return None
+        result = enrich_document(
+            document,
+            cleaned,
+            quality_score=self.last_analysis["quality_score"],
+            quality_signals=self.last_analysis["quality_signals"],
+            pii_redactions=self.last_analysis["pii_redactions"],
+            content_hash=self.last_analysis["content_hash"],
+            simhash=self.last_analysis["simhash"],
+            contamination_matches=self.last_analysis["contamination_matches"],
+            source_file=source_file,
+        )
+        source = result["source"]
+        status = result["license_status"]
+        self.source_counts[source] = self.source_counts.get(source, 0) + 1
+        self.license_status_counts[status] = self.license_status_counts.get(status, 0) + 1
+        return result
 
     def clean_jsonl(self, input_file: str, output_file: str):
         """JSONL dosyasını temizle."""
@@ -163,11 +245,9 @@ class ToprakCleaner:
             for line in fin:
                 try:
                     doc = json.loads(line)
-                    cleaned = self.clean_text(doc.get("text", ""))
-                    if cleaned:
-                        doc["text"] = cleaned
-                        doc["word_count"] = len(cleaned.split())
-                        json.dump(doc, fout, ensure_ascii=False)
+                    cleaned_doc = self.clean_document(doc, source_file=input_file)
+                    if cleaned_doc:
+                        json.dump(cleaned_doc, fout, ensure_ascii=False)
                         fout.write("\n")
                 except json.JSONDecodeError:
                     continue
@@ -178,11 +258,52 @@ class ToprakCleaner:
         """Bir dizindeki tüm JSONL dosyalarını temizle."""
         os.makedirs(output_dir, exist_ok=True)
 
-        for filename in os.listdir(input_dir):
+        output_files = []
+        for filename in sorted(os.listdir(input_dir)):
             if filename.endswith(".jsonl"):
                 input_path = os.path.join(input_dir, filename)
                 output_path = os.path.join(output_dir, f"clean_{filename}")
                 self.clean_jsonl(input_path, output_path)
+                output_files.append(output_path)
+
+        self.write_manifest(output_dir, output_files)
+
+    def write_manifest(self, output_dir: str, output_files: List[str]) -> str:
+        """Temiz korpusun üretim ayarlarını ve dosya hashlerini kaydet."""
+        files = []
+        for path in output_files:
+            digest = hashlib.sha256()
+            with open(path, "rb") as handle:
+                for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            files.append({
+                "path": os.path.relpath(path, output_dir),
+                "bytes": os.path.getsize(path),
+                "sha256": digest.hexdigest(),
+            })
+
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": utc_now_iso(),
+            "cleaner": {
+                "min_words": self.min_words,
+                "max_words": self.max_words,
+                "quality_threshold": self.quality_threshold,
+                "near_duplicate_distance": self.dedup_index.max_hamming_distance,
+                "pii_redaction": self.redact_pii,
+                "contamination_action": self.contamination_action,
+                "contamination_enabled": self.contamination_detector is not None,
+            },
+            "stats": dict(self.stats),
+            "source_counts": dict(sorted(self.source_counts.items())),
+            "license_status_counts": dict(sorted(self.license_status_counts.items())),
+            "files": files,
+        }
+        manifest_path = os.path.join(output_dir, "corpus_manifest.json")
+        with open(manifest_path, "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle, ensure_ascii=False, indent=2)
+        print(f"✓ Korpus manifesti: {manifest_path}")
+        return manifest_path
 
     def prepare_tokenizer_data(self, input_dir: str, output_file: str):
         """
@@ -219,7 +340,12 @@ class ToprakCleaner:
         print(f"  Çok Kısa:    {self.stats['too_short']}")
         print(f"  Çok Uzun:    {self.stats['too_long']}")
         print(f"  Duplikat:    {self.stats['duplicate']}")
+        print(f"    Exact:     {self.stats['exact_duplicate']}")
+        print(f"    Near:      {self.stats['near_duplicate']}")
         print(f"  Düşük Kalite:{self.stats['bad_quality']}")
+        print(f"  PII Belgesi: {self.stats['pii_documents']}")
+        print(f"  PII Redact:  {self.stats['pii_redactions']}")
+        print(f"  Contaminated:{self.stats['contaminated']}")
         accepted_pct = (
             self.stats["accepted"] / max(self.stats["total"], 1) * 100
         )
@@ -237,9 +363,20 @@ if __name__ == "__main__":
                         help="Çıktı dizini")
     parser.add_argument("--tokenizer-data", type=str, default=None,
                         help="Tokenizer eğitim dosyası (düz metin)")
+    parser.add_argument("--benchmark-path", type=str, default=None,
+                        help="Contamination kontrolü için benchmark JSONL/TXT veya dizin")
+    parser.add_argument("--contamination-action", choices=["reject", "flag"],
+                        default="reject", help="Eşleşen benchmark metinlerini reddet veya işaretle")
+    parser.add_argument("--quality-threshold", type=float, default=0.50)
+    parser.add_argument("--no-pii-redaction", action="store_true")
 
     args = parser.parse_args()
-    cleaner = ToprakCleaner()
+    cleaner = ToprakCleaner(
+        quality_threshold=args.quality_threshold,
+        redact_pii=not args.no_pii_redaction,
+        benchmark_path=args.benchmark_path,
+        contamination_action=args.contamination_action,
+    )
 
     cleaner.clean_directory(args.input, args.output)
 

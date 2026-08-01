@@ -139,7 +139,8 @@ toprak/
 ├── data/                         # Veri Toplama & İşleme
 │   ├── sources.py                #    Türkçe kaynak URL'leri ve yapılandırma
 │   ├── crawler.py                #    asyncio + aiohttp web crawler
-│   ├── cleaner.py                #    7 aşamalı veri temizleme pipeline
+│   ├── cleaner.py                #    Kalite, PII, dedup ve contamination pipeline
+│   ├── governance.py             #    Provenance, lisans ve audit metadata şeması
 │   └── dataset.py                #    PyTorch Dataset + DataLoader
 │
 ├── training/                     # Eğitim
@@ -164,6 +165,7 @@ toprak/
 │   ├── test_consonant_harmony.py #    Ünsüz benzeşmesi birim testleri
 │   └── test_morph_head.py        #    Morfolojik başlık birim testleri
 │
+├── DATA_GOVERNANCE.md            #    Veri lisansı, kalite ve izlenebilirlik rehberi
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```
@@ -403,9 +405,10 @@ Bu proje Türk yapay zeka topluluğuna açıktır. Katkıda bulunmak isterseniz:
 <summary><strong>Veri Pipeline</strong></summary>
 
 - **Crawler**: asyncio + aiohttp, robots.txt uyumlu, 1s rate limit
-- **Temizleme**: 7 aşamalı pipeline — HTML artıkları, Unicode (NFKC), boilerplate filtre, kalite skoru, MD5 dedup
+- **Temizleme**: HTML/Unicode, PII redaction, açıklanabilir kalite skoru, SHA-256 exact + SimHash near-dedup ve benchmark contamination kontrolü
 - **Kaynaklar**: Wikipedia (~2GB), Haber siteleri (~5GB), Kamu kurumları (~1GB), Edebiyat (~500MB), Akademik (~2GB)
-- **Format**: JSONL — `{url, text, source, timestamp, word_count}`
+- **İzlenebilirlik**: Kaynak, dataset revision, lisans durumu, indirme zamanı, içerik hash'i ve kalite sinyalleri her belgede tutulur
+- **Format**: JSONL — `toprak-document-v1`; ayrıntılar için [DATA_GOVERNANCE.md](DATA_GOVERNANCE.md)
 
 </details>
 

@@ -30,6 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tqdm import tqdm
 
+from data.governance import build_provenance, content_sha256, utc_now_iso
+
 
 # ─────────────────────────────────────────────────
 # 1. Wikipedia Verisi İndirme
@@ -63,6 +65,7 @@ def download_wikipedia(output_dir: str = "data_cache", max_articles: int = None)
 
     count = 0
     total_words = 0
+    downloaded_at = utc_now_iso()
 
     with open(output_file, "w", encoding="utf-8") as f:
         for i, article in enumerate(tqdm(dataset, total=total, desc="Wikipedia")):
@@ -80,8 +83,13 @@ def download_wikipedia(output_dir: str = "data_cache", max_articles: int = None)
             doc = {
                 "text": text,
                 "title": title,
-                "source": "wikipedia_tr",
                 "word_count": len(words),
+                "raw_content_sha256": content_sha256(text),
+                **build_provenance(
+                    "wiki",
+                    downloaded_at=downloaded_at,
+                    source_record_id=str(article.get("id", "")) or None,
+                ),
             }
 
             json.dump(doc, f, ensure_ascii=False)
@@ -141,8 +149,9 @@ def create_sample_data(output_dir: str = "data_cache", num_samples: int = 1000):
 
             doc = {
                 "text": text,
-                "source": "sample",
                 "word_count": len(text.split()),
+                "raw_content_sha256": content_sha256(text),
+                **build_provenance("sample"),
             }
             json.dump(doc, f_jsonl, ensure_ascii=False)
             f_jsonl.write("\n")
@@ -262,6 +271,8 @@ def prepare_training_data(
     output_dir: str = "data_cache/clean",
     tokenizer_model: str = "toprak_tokenizer.model",
     train_ratio: float = 0.95,
+    benchmark_path: str = None,
+    contamination_action: str = "reject",
 ):
     """
     Verileri temizle ve train/eval olarak böl.
@@ -274,7 +285,11 @@ def prepare_training_data(
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(eval_dir, exist_ok=True)
 
-    cleaner = ToprakCleaner(min_words=30)
+    cleaner = ToprakCleaner(
+        min_words=30,
+        benchmark_path=benchmark_path,
+        contamination_action=contamination_action,
+    )
 
     print(f"\n🧹 Veri temizleniyor...")
 
@@ -296,11 +311,9 @@ def prepare_training_data(
             for line in fin:
                 try:
                     doc = json.loads(line)
-                    cleaned = cleaner.clean_text(doc.get("text", ""))
-                    if cleaned:
-                        doc["text"] = cleaned
-                        doc["word_count"] = len(cleaned.split())
-                        out = json.dumps(doc, ensure_ascii=False) + "\n"
+                    cleaned_doc = cleaner.clean_document(doc, source_file=filepath)
+                    if cleaned_doc:
+                        out = json.dumps(cleaned_doc, ensure_ascii=False) + "\n"
 
                         # Train/eval split
                         if random.random() < train_ratio:
@@ -311,6 +324,15 @@ def prepare_training_data(
                     continue
 
     cleaner.print_stats()
+    cleaner.write_manifest(
+        output_dir,
+        [
+            os.path.join(split_dir, filename)
+            for split_dir in (train_dir, eval_dir)
+            for filename in sorted(os.listdir(split_dir))
+            if filename.endswith(".jsonl")
+        ],
+    )
 
     # Boyut bilgisi
     train_size = sum(
@@ -391,6 +413,8 @@ def run_full_pipeline(args):
             data_dir=args.data_dir,
             output_dir=os.path.join(args.data_dir, "clean"),
             tokenizer_model=f"{args.tokenizer_prefix}.model",
+            benchmark_path=args.benchmark_path,
+            contamination_action=args.contamination_action,
         )
 
     print("\n" + "=" * 60)
@@ -440,6 +464,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vocab-size", type=int, default=32000,
         help="Tokenizer vocab size"
+    )
+    parser.add_argument(
+        "--benchmark-path", type=str, default=None,
+        help="Contamination kontrolü için benchmark JSONL/TXT veya dizin"
+    )
+    parser.add_argument(
+        "--contamination-action", choices=["reject", "flag"], default="reject",
+        help="Benchmark eşleşmelerini reddet veya metadata'da işaretle"
     )
 
     args = parser.parse_args()

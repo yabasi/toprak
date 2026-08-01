@@ -74,10 +74,13 @@ python scripts/download_all_corpora.py \
 ### 1d) Temizleme
 
 ```bash
-# Mevcut cleaner pipeline'ı (HTML, boilerplate, dedup)
+# Kalite, PII, exact/near-dedup ve provenance pipeline'ı
 python data/cleaner.py \
   --input /workspace/data_raw \
   --output /workspace/data_raw/clean
+
+# Metadata, hash ve duplicate denetimi
+python scripts/audit_corpus.py /workspace/data_raw/clean --strict
 ```
 
 ### 1e) Tokenizer'ı sıfırdan eğit

@@ -10,13 +10,14 @@ import asyncio
 import json
 import os
 import re
-import time
-from datetime import datetime
+import sys
 from typing import List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 import aiohttp
 from bs4 import BeautifulSoup
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from langdetect import detect
@@ -30,6 +31,7 @@ from data.sources import (
     SKIP_PATTERNS,
     SOURCES,
 )
+from data.governance import build_provenance, content_sha256, utc_now_iso
 
 
 class ToprakCrawler:
@@ -59,6 +61,7 @@ class ToprakCrawler:
         self.visited: Set[str] = set()
         self.results: List[dict] = []
         self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.downloaded_at = utc_now_iso()
 
         os.makedirs(output_dir, exist_ok=True)
 
@@ -130,9 +133,13 @@ class ToprakCrawler:
         return {
             "url": url,
             "text": text,
-            "source": urlparse(url).netloc,
-            "timestamp": datetime.now().isoformat(),
             "word_count": len(words),
+            "raw_content_sha256": content_sha256(text),
+            **build_provenance(
+                urlparse(url).netloc,
+                source_url=url,
+                downloaded_at=self.downloaded_at,
+            ),
         }
 
     def extract_links(self, html: str, base_url: str) -> List[str]:

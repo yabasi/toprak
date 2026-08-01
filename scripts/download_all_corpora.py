@@ -18,8 +18,7 @@ Kullanım (CPU pod'da çalıştırın — A100 saati harcamayın):
         --wikipedia --fineweb2 --culturax \
         --fineweb-target-gb 30 --culturax-target-gb 15
 
-Ortak JSONL satır şeması:
-    {"text": str, "source": "wiki|fineweb2|culturax", "word_count": int}
+Ortak JSONL satır şeması Toprak document-v1 provenance metadata'sını içerir.
 """
 
 import argparse
@@ -33,12 +32,22 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tqdm import tqdm
 
+from data.governance import build_provenance, content_sha256, utc_now_iso
+
 
 MIN_WORDS = 30   # Bu kelime sayısının altındaki dokümanları indirme aşamasında at
 MAX_WORDS = 100_000
 
 
-def _write_doc(fout, text: str, source: str) -> int:
+def _write_doc(
+    fout,
+    text: str,
+    source: str,
+    *,
+    downloaded_at: str,
+    source_url: Optional[str] = None,
+    source_record_id: Optional[str] = None,
+) -> int:
     """Tek bir dokümanı JSONL satırı olarak yaz. Yazılan byte sayısı döner (0 = atlandı)."""
     if not text:
         return 0
@@ -49,10 +58,18 @@ def _write_doc(fout, text: str, source: str) -> int:
     n = len(words)
     if n < MIN_WORDS or n > MAX_WORDS:
         return 0
-    line = json.dumps(
-        {"text": text, "source": source, "word_count": n},
-        ensure_ascii=False,
-    ) + "\n"
+    doc = {
+        "text": text,
+        "word_count": n,
+        "raw_content_sha256": content_sha256(text),
+        **build_provenance(
+            source,
+            source_url=source_url,
+            downloaded_at=downloaded_at,
+            source_record_id=source_record_id,
+        ),
+    }
+    line = json.dumps(doc, ensure_ascii=False) + "\n"
     fout.write(line)
     return len(line.encode("utf-8"))
 
@@ -70,12 +87,19 @@ def download_wikipedia(output_dir: str, max_articles: Optional[int] = None) -> s
     count = 0
     bytes_written = 0
     t0 = time.time()
+    downloaded_at = utc_now_iso()
     with open(out_file, "w", encoding="utf-8") as fout:
         pbar = tqdm(ds, desc="Wikipedia", unit="doc")
         for article in pbar:
             if max_articles and count >= max_articles:
                 break
-            written = _write_doc(fout, article.get("text", ""), "wiki")
+            written = _write_doc(
+                fout,
+                article.get("text", ""),
+                "wiki",
+                downloaded_at=downloaded_at,
+                source_record_id=str(article.get("id", "")) or None,
+            )
             if written:
                 count += 1
                 bytes_written += written
@@ -126,12 +150,22 @@ def download_streaming_hf(
     bytes_written = 0
     skipped = 0
     t0 = time.time()
+    downloaded_at = utc_now_iso()
 
     with open(output_file, "w", encoding="utf-8") as fout:
         pbar = tqdm(ds, desc=source_tag, unit="doc")
         for ex in pbar:
             text = ex.get(text_field, "")
-            written = _write_doc(fout, text, source_tag)
+            written = _write_doc(
+                fout,
+                text,
+                source_tag,
+                downloaded_at=downloaded_at,
+                source_url=ex.get("url"),
+                source_record_id=str(
+                    ex.get("id") or ex.get("digest") or ex.get("warc_filename") or ""
+                ) or None,
+            )
             if written:
                 count += 1
                 bytes_written += written
