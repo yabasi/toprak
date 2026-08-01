@@ -14,11 +14,12 @@ Sıfırdan Türkçe dil modeli geliştirme rehberi.
 6. [Metin Üretimi](#6-metin-üretimi)
 7. [Sohbet Modu](#7-sohbet-modu)
 8. [Model Değerlendirme](#8-model-değerlendirme)
-9. [HuggingFace'e Yükleme](#9-huggingfacee-yükleme)
-10. [Model Boyutları](#10-model-boyutları)
-11. [Eğitim Parametreleri](#11-eğitim-parametreleri)
-12. [RTX 4090 Sunucuda Eğitim](#12-rtx-4090-sunucuda-eğitim)
-13. [Sık Karşılaşılan Sorunlar](#13-sık-karşılaşılan-sorunlar)
+9. [Yardımcı Loss Ablation](#9-yardımcı-loss-ablation)
+10. [HuggingFace'e Yükleme](#10-huggingfacee-yükleme)
+11. [Model Boyutları](#11-model-boyutları)
+12. [Eğitim Parametreleri](#12-eğitim-parametreleri)
+13. [RTX 4090 Sunucuda Eğitim](#13-rtx-4090-sunucuda-eğitim)
+14. [Sık Karşılaşılan Sorunlar](#14-sık-karşılaşılan-sorunlar)
 
 ---
 
@@ -323,7 +324,31 @@ kontrollerini tek JSON raporunda toplar.
 
 ---
 
-## 9. HuggingFace'e Yükleme
+## 9. Yardımcı Loss Ablation
+
+Yardımcı loss'ların katkısını yalnız eğitim loss'una bakarak yorumlamayın. Aynı
+başlangıç checkpoint'i, seed, veri sırası ve hiperparametrelerle baseline ve
+tek-loss varyantlarını çalıştırın:
+
+```bash
+python3 scripts/run_ablation.py \
+  --base-checkpoint checkpoints/toprak_step_5000.pt \
+  --data-dir data_cache/bin \
+  --bin-mode \
+  --model-size medium \
+  --target-step 10000 \
+  --seed 42 \
+  --device cuda \
+  --output-dir ablation_runs/run_001
+```
+
+Bu komut varsayılan olarak dry-run yapar. Komutlar ve yollar doğruysa
+`--execute` ekleyin. Ayrıntılı matris, rapor alanları ve yorumlama sınırları için
+[ABLATION.md](ABLATION.md) dosyasına bakın.
+
+---
+
+## 10. HuggingFace'e Yükleme
 
 Modeli HuggingFace'e yükleyip başkalarıyla paylaş.
 
@@ -340,7 +365,7 @@ python3 upload/push_to_hub.py \
 
 ---
 
-## 10. Model Boyutları
+## 11. Model Boyutları
 
 | Boyut | Parametre | Eğitim Süresi (M4 Pro) | Eğitim Süresi (RTX 4090) | Komut |
 |---|---|---|---|---|
@@ -353,7 +378,7 @@ python3 upload/push_to_hub.py \
 
 ---
 
-## 11. Eğitim Parametreleri
+## 12. Eğitim Parametreleri
 
 ### Komut satırı parametreleri
 
@@ -369,6 +394,8 @@ python3 upload/push_to_hub.py \
 | `--warmup-steps` | Modele göre | LR warmup adımı |
 | `--grad-accum` | Modele göre | Gradient accumulation adım sayısı |
 | `--save-every` | 5000 | Kaç adımda bir checkpoint kaydet |
+| `--seed` | 42 | Model başlangıcı ve DataLoader sırası |
+| `--experiment-name` | default | Checkpoint'e yazılan deney kimliği |
 | `--resume` | *(yok)* | Devam edilecek checkpoint |
 | `--checkpoint-dir` | checkpoints | Checkpoint kayıt dizini |
 | `--device` | otomatik | mps, cuda veya cpu |
@@ -399,7 +426,7 @@ python3 upload/push_to_hub.py \
 
 ---
 
-## 12. RTX 4090 Sunucuda Eğitim
+## 13. RTX 4090 Sunucuda Eğitim
 
 ### Adım 1: Projeyi sunucuya yükle
 
@@ -456,7 +483,7 @@ python3 inference/generate.py \
 
 ---
 
-## 13. Sık Karşılaşılan Sorunlar
+## 14. Sık Karşılaşılan Sorunlar
 
 ### ❌ "Veri dosyası bulunamadı"
 ```

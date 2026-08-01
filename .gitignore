@@ -100,6 +100,7 @@ runs/
 mlruns/
 tensorboard/
 evaluation/reports/
+ablation_runs/
 
 # ─────────────────────────────────────────────────────
 #  Güvenlik — Asla Commit'lenmesin

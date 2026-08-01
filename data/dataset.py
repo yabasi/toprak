@@ -352,8 +352,13 @@ def create_dataloader(
     num_workers: int = 0,
     pin_memory: bool = False,
     drop_last: bool = True,
+    seed: Optional[int] = None,
 ) -> DataLoader:
     """DataLoader oluştur."""
+    generator = None
+    if seed is not None:
+        generator = torch.Generator()
+        generator.manual_seed(seed)
     return DataLoader(
         dataset,
         batch_size=batch_size,
@@ -361,6 +366,7 @@ def create_dataloader(
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=drop_last,
+        generator=generator,
     )
 
 

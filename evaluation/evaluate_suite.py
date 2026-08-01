@@ -114,6 +114,10 @@ def main():
         "benchmark_dir": os.path.abspath(args.benchmarks),
         "benchmark_sha256": benchmark_hashes(args.benchmarks),
         "device": device,
+        "experiment_name": checkpoint.get("training_recipe", {}).get(
+            "experiment_name"
+        ),
+        "training_recipe": checkpoint.get("training_recipe"),
     }
 
     if args.perplexity_data:

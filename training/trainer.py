@@ -12,6 +12,7 @@ Optimizasyonlar:
 - bfloat16 mixed precision (MPS)
 """
 
+import hashlib
 import os
 import time
 from pathlib import Path
@@ -61,6 +62,7 @@ class ToprakTrainer:
         consonant_harmony_loss=None,
         syllable_rhyme_loss=None,
         use_bf16: bool = False,
+        training_recipe: Optional[dict] = None,
     ):
         self.model = model
         self.config = config
@@ -71,6 +73,7 @@ class ToprakTrainer:
         self.morph_weight_loss = morph_weight_loss
         self.consonant_harmony_loss = consonant_harmony_loss
         self.syllable_rhyme_loss = syllable_rhyme_loss
+        self.training_recipe = training_recipe or {}
 
         # bf16 yalnız CUDA'da anlamlı; bf16 destekli kart kontrolü
         self.use_bf16 = False
@@ -524,6 +527,7 @@ class ToprakTrainer:
             "scheduler_state_dict": self.scheduler.state_dict(),
             "global_step": self.global_step,
             "best_eval_loss": self.best_eval_loss,
+            "training_recipe": self.training_recipe,
             "config": {
                 "vocab_size": self.config.vocab_size,
                 "d_model": self.config.d_model,
@@ -546,6 +550,16 @@ class ToprakTrainer:
     def load_checkpoint(self, filepath: str):
         """Checkpoint'ten devam et."""
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
+
+        digest = hashlib.sha256()
+        with open(filepath, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        self.training_recipe.update({
+            "resume_checkpoint_sha256": digest.hexdigest(),
+            "resume_global_step": checkpoint.get("global_step"),
+            "resume_scheduler_state": checkpoint.get("scheduler_state_dict"),
+        })
 
         # torch.compile model'e yükleme
         model_to_load = self.model

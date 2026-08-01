@@ -36,7 +36,7 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
-> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md) — Kurulum, eğitim, inference, parametreler ve sık sorulan sorular.
+> 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md) — Kurulum, eğitim, inference, parametreler ve sık sorulan sorular. Yardımcı kayıpların kontrollü ölçümü için [ABLATION.md](ABLATION.md) dosyasına bakın.
 
 ---
 
@@ -156,13 +156,16 @@ toprak/
 │   ├── eval.py                   #    Perplexity hesaplama
 │   ├── suite.py                  #    Çok boyutlu deterministik eval motoru
 │   ├── evaluate_suite.py         #    Checkpoint karşılaştırma CLI
+│   ├── ablation.py               #    Eşlenik delta + bootstrap analizi
+│   ├── compare_ablation.py       #    Ablation raporu CLI
 │   └── benchmarks/               #    Sürümlü Türkçe seed benchmarklar
 │
 ├── upload/                       # HuggingFace Entegrasyonu
 │   └── push_to_hub.py            #    Model + tokenizer yükleme
 │
 ├── scripts/                      # Yardımcı Araçlar
-│   └── prepare_data.py           #    Uçtan uca veri pipeline
+│   ├── prepare_data.py           #    Uçtan uca veri pipeline
+│   └── run_ablation.py           #    Kontrollü auxiliary-loss deney matrisi
 │
 ├── tests/                        # 🧪 Testler (Birim ve Entegrasyon Testleri)
 │   ├── test_consonant_harmony.py #    Ünsüz benzeşmesi birim testleri
@@ -170,6 +173,7 @@ toprak/
 │
 ├── DATA_GOVERNANCE.md            #    Veri lisansı, kalite ve izlenebilirlik rehberi
 ├── EVALUATION.md                 #    Eval görevleri, metrikler ve rapor şeması
+├── ABLATION.md                   #    Yardımcı loss katkı ölçüm protokolü
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```

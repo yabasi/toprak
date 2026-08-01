@@ -60,6 +60,14 @@ def parse_args():
     parser.add_argument("--warmup-steps", type=int, default=None)
     parser.add_argument("--grad-accum", type=int, default=None)
     parser.add_argument("--save-every", type=int, default=None)
+    parser.add_argument(
+        "--seed", type=int, default=42,
+        help="Model başlangıcı ve veri sırası için deney seed'i (varsayılan: 42)"
+    )
+    parser.add_argument(
+        "--experiment-name", type=str, default="default",
+        help="Checkpoint ve ablation raporlarında saklanan deney kimliği"
+    )
 
     # Checkpoint
     parser.add_argument(
@@ -177,9 +185,65 @@ def parse_args():
     return parser.parse_args()
 
 
+def build_training_recipe(args, config) -> dict:
+    """Checkpoint'e yazılacak, ablation karşılaştırmasına uygun eğitim tarifi."""
+    return {
+        "experiment_name": args.experiment_name,
+        "model_size": args.model_size,
+        "data_dir": os.path.abspath(args.data_dir),
+        "eval_data_dir": (
+            os.path.abspath(args.eval_data_dir) if args.eval_data_dir else None
+        ),
+        "bin_mode": args.bin_mode,
+        "seed": args.seed,
+        "batch_size": config.batch_size,
+        "learning_rate": config.learning_rate,
+        "max_steps": config.max_steps,
+        "warmup_steps": config.warmup_steps,
+        "grad_accum_steps": config.grad_accum_steps,
+        "save_every": config.save_every,
+        "device": config.device,
+        "num_workers": args.num_workers,
+        "bf16": args.bf16,
+        "compile": not args.no_compile,
+        "gradient_checkpointing": not args.no_grad_checkpoint,
+        "auxiliary_losses": {
+            "vowel_harmony": {
+                "enabled": args.vowel_harmony,
+                "lambda": args.vh_lambda,
+                "warmup_steps": args.vh_warmup_steps,
+            },
+            "morph_weight": {
+                "enabled": args.morph_weight,
+                "suffix_weight": args.morph_suffix_weight,
+                "warmup_steps": args.morph_warmup_steps,
+            },
+            "consonant_harmony": {
+                "enabled": args.consonant_harmony,
+                "lambda": args.ch_lambda,
+                "warmup_steps": args.ch_warmup_steps,
+            },
+            "morph_head": {
+                "enabled": args.morph_head,
+                "lambda": args.mh_lambda,
+            },
+            "syllable_rhyme": {
+                "enabled": args.syllable_rhyme,
+                "lambda_syllable": args.sr_lambda_syllable,
+                "lambda_rhyme": args.sr_lambda_rhyme,
+                "warmup_steps": args.sr_warmup_steps,
+            },
+        },
+    }
+
+
 def main():
     setup_error_handler()
     args = parse_args()
+
+    if not args.experiment_name.strip():
+        raise ValueError("--experiment-name boş olamaz")
+    torch.manual_seed(args.seed)
 
     print("🌱 Toprak — Türkçe Dil Modeli")
     print("=" * 50)
@@ -254,6 +318,7 @@ def main():
             max_seq_len=config.max_seq_len,
             shuffle_shards=False,  # curriculum'u koru
             expected_vocab_size=config.vocab_size,
+            seed=args.seed,
         )
         # Eval split aynı bin_dir altında manifest'te tanımlı
         try:
@@ -279,6 +344,7 @@ def main():
             shuffle=shuffle_train,
             num_workers=args.num_workers,
             pin_memory=(config.device == "cuda"),
+            seed=args.seed,
         )
         eval_loader = None
         if eval_dataset is not None:
@@ -289,6 +355,7 @@ def main():
                 num_workers=max(1, args.num_workers // 2),
                 pin_memory=(config.device == "cuda"),
                 drop_last=False,
+                seed=args.seed,
             )
     else:
         # JSONL mode (geriye uyumlu)
@@ -298,6 +365,7 @@ def main():
             tokenizer=tokenizer,
             max_seq_len=config.max_seq_len,
             split="train",
+            seed=args.seed,
         )
         validate_dataset_size(train_dataset, min_blocks=1, description="Eğitim verisi")
 
@@ -305,6 +373,7 @@ def main():
             train_dataset,
             batch_size=config.batch_size,
             shuffle=True,
+            seed=args.seed,
         )
 
         eval_loader = None
@@ -322,6 +391,7 @@ def main():
                 batch_size=config.batch_size,
                 shuffle=False,
                 drop_last=False,
+                seed=args.seed,
             )
 
     # ─────────────────────────────────────────────
@@ -406,6 +476,7 @@ def main():
         consonant_harmony_loss=ch_loss,
         syllable_rhyme_loss=sr_loss,
         use_bf16=args.bf16,
+        training_recipe=build_training_recipe(args, config),
     )
 
     trainer.train(resume_from=args.resume)
