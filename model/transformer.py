@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — Transformer Mimarisi
@@ -185,12 +185,21 @@ class ToprakLM(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, input_ids, targets=None, past_kvs=None):
+    def forward(
+        self,
+        input_ids,
+        targets=None,
+        past_kvs=None,
+        compute_lm_loss=True,
+    ):
         """
         Args:
             input_ids: (batch_size, seq_len) — token ID'leri
             targets: (batch_size, seq_len) — hedef token ID'leri (opsiyonel)
             past_kvs: list of (k, v) tuples — KV cache (opsiyonel)
+            compute_lm_loss: False ise standart CE hesaplanmaz; targets yine
+                auxiliary başlıklar için kullanılır. Özel CE loss'larıyla
+                birlikte morph-head eğitimi için kullanılır.
 
         Returns:
             logits: (batch_size, seq_len, vocab_size)
@@ -229,11 +238,14 @@ class ToprakLM(nn.Module):
         # Loss hesaplama
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(
-                logits.view(-1, self.config.vocab_size),
-                targets.view(-1),
-                ignore_index=self.config.pad_token_id,
-            )
+            if compute_lm_loss:
+                loss = F.cross_entropy(
+                    logits.view(-1, self.config.vocab_size),
+                    targets.view(-1),
+                    ignore_index=self.config.pad_token_id,
+                )
+            else:
+                loss = logits.new_zeros(())
 
             # Morfolojik çoklu görev kaybı (auxiliary loss)
             if self.use_morph_head:

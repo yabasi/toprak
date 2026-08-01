@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — LR Scheduler
@@ -32,11 +32,24 @@ class CosineWarmupScheduler:
         self.min_lr = min_lr
         self.current_step = 0
 
+        # Trainer scheduler.step() çağrısını optimizer adımından sonra yapar.
+        # Bu nedenle ilk optimizer adımının yanlışlıkla max_lr ile başlamaması
+        # için başlangıç LR'sini burada ilk warmup değerine ayarla.
+        self._set_lr(self.get_lr())
+
+    def _set_lr(self, lr: float) -> None:
+        """Optimizer parametre gruplarına LR uygula."""
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = lr
+
     def get_lr(self) -> float:
         """Mevcut adım için learning rate hesapla."""
         if self.current_step < self.warmup_steps:
-            # Linear warmup
-            return self.max_lr * (self.current_step / max(self.warmup_steps, 1))
+            # İlk optimizer adımı max_lr / warmup_steps ile başlar; warmup'ın
+            # son adımı max_lr'ye ulaşır.
+            return self.max_lr * (
+                (self.current_step + 1) / max(self.warmup_steps, 1)
+            )
         elif self.current_step >= self.max_steps:
             return self.min_lr
         else:
@@ -49,11 +62,10 @@ class CosineWarmupScheduler:
             )
 
     def step(self):
-        """Bir adım ilerle ve LR'yi güncelle."""
-        lr = self.get_lr()
-        for param_group in self.optimizer.param_groups:
-            param_group["lr"] = lr
+        """Tamamlanan optimizer adımını kaydet ve sonraki LR'yi uygula."""
         self.current_step += 1
+        lr = self.get_lr()
+        self._set_lr(lr)
         return lr
 
     def state_dict(self) -> dict:
@@ -73,3 +85,4 @@ class CosineWarmupScheduler:
         self.max_steps = state_dict["max_steps"]
         self.max_lr = state_dict["max_lr"]
         self.min_lr = state_dict["min_lr"]
+        self._set_lr(self.get_lr())

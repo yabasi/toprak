@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — HuggingFace Hub Entegrasyonu
@@ -207,7 +207,7 @@ model = ToprakLM.from_pretrained("repo-adi/toprak-v1")
 
 ## Lisans
 
-MIT License
+Apache License 2.0
 """
 
 

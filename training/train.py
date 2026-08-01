@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — Ana Eğitim Scripti
@@ -253,6 +253,7 @@ def main():
             split="train",
             max_seq_len=config.max_seq_len,
             shuffle_shards=False,  # curriculum'u koru
+            expected_vocab_size=config.vocab_size,
         )
         # Eval split aynı bin_dir altında manifest'te tanımlı
         try:
@@ -260,15 +261,22 @@ def main():
                 bin_dir=args.data_dir,
                 split="eval",
                 max_seq_len=config.max_seq_len,
+                expected_vocab_size=config.vocab_size,
             )
-        except Exception as e:
+        except RuntimeError as e:
             print(f"  ⚠ Eval shard'ları yüklenemedi: {e}")
             eval_dataset = None
 
+        # Curriculum manifestleri kalite sırasını blok seviyesinde taşır.
+        # Global shuffle bu sırayı tamamen bozacağından yalnız normal
+        # shard setlerinde karıştırma yapılır.
+        shuffle_train = not train_dataset.curriculum
+        if train_dataset.curriculum:
+            print("  ✓ Curriculum sırası korunuyor (DataLoader shuffle kapalı)")
         train_loader = create_dataloader(
             train_dataset,
             batch_size=config.batch_size,
-            shuffle=True,
+            shuffle=shuffle_train,
             num_workers=args.num_workers,
             pin_memory=(config.device == "cuda"),
         )

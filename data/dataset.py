@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 import json
 import os
@@ -178,7 +178,7 @@ class ToprakShardDataset(Dataset):
         bin_dir: shard dizini (manifest.json içermeli)
         split: "train" veya "eval"
         max_seq_len: blok uzunluğu (eğitim seq_len ile eşleşmeli)
-        dtype: numpy dtype (varsayılan uint16)
+        dtype: Opsiyonel numpy dtype doğrulaması; asıl dtype manifestten okunur
         shuffle_shards: epoch başında shard'ları karıştır (curriculum'u bozar; default False)
         seed: rng seed
     """
@@ -188,9 +188,10 @@ class ToprakShardDataset(Dataset):
         bin_dir: str,
         split: str = "train",
         max_seq_len: int = 2048,
-        dtype=np.uint16,
+        dtype=None,
         shuffle_shards: bool = False,
         seed: int = 42,
+        expected_vocab_size: Optional[int] = None,
     ):
         manifest_path = os.path.join(bin_dir, "manifest.json")
         if not os.path.exists(manifest_path):
@@ -205,14 +206,42 @@ class ToprakShardDataset(Dataset):
         if split not in ("train", "eval"):
             raise ValueError(f"split 'train' veya 'eval' olmalı, '{split}' verildi")
 
+        if split not in manifest:
+            raise ValueError(f"Manifest '{split}' bölümü içermiyor: {manifest_path}")
+
+        dtype_map = {
+            "uint16": np.dtype(np.uint16),
+            "int32": np.dtype(np.int32),
+            "int64": np.dtype(np.int64),
+        }
+        manifest_dtype_name = manifest.get("dtype")
+        if manifest_dtype_name not in dtype_map:
+            raise ValueError(
+                f"Manifest dtype desteklenmiyor: {manifest_dtype_name!r}. "
+                f"Desteklenenler: {', '.join(dtype_map)}"
+            )
+        manifest_dtype = dtype_map[manifest_dtype_name]
+        if dtype is not None and np.dtype(dtype) != manifest_dtype:
+            raise ValueError(
+                f"dtype uyuşmazlığı: manifest={manifest_dtype}, istenen={np.dtype(dtype)}"
+            )
+
+        manifest_vocab_size = manifest.get("tokenizer_vocab_size")
+        if expected_vocab_size is not None and manifest_vocab_size != expected_vocab_size:
+            raise ValueError(
+                "Tokenizer vocab uyuşmazlığı: "
+                f"manifest={manifest_vocab_size}, model/tokenizer={expected_vocab_size}"
+            )
+
         meta = manifest[split]
         self.split = split
         self.max_seq_len = max_seq_len
-        self.dtype = dtype
-        self.bin_dir = bin_dir
+        self.dtype = manifest_dtype
+        self.bin_dir = os.path.realpath(bin_dir)
+        self.curriculum = bool(manifest.get("curriculum", False))
 
         # Shard'ları yükle (memmap)
-        shard_entries = meta["shards"]
+        shard_entries = list(meta.get("shards", []))
         if shuffle_shards and split == "train":
             rng = random.Random(seed)
             rng.shuffle(shard_entries)
@@ -225,15 +254,31 @@ class ToprakShardDataset(Dataset):
         self.cum_blocks: List[int] = []
         running = 0
         skipped_shards = 0
+        file_token_total = 0
 
         for entry in shard_entries:
-            path = os.path.join(bin_dir, entry["path"])
+            relative_path = entry.get("path")
+            if not relative_path:
+                raise ValueError(f"Geçersiz shard girdisi: {entry!r}")
+            path = os.path.realpath(os.path.join(self.bin_dir, relative_path))
+            if os.path.commonpath([self.bin_dir, path]) != self.bin_dir:
+                raise ValueError(f"Shard yolu bin dizini dışına çıkıyor: {relative_path}")
             if not os.path.exists(path):
-                print(f"  ⚠ Shard atlandı (bulunamadı): {path}")
-                skipped_shards += 1
-                continue
-            arr = np.memmap(path, dtype=dtype, mode="r")
+                raise FileNotFoundError(f"Manifestteki shard bulunamadı: {path}")
+            if os.path.getsize(path) % manifest_dtype.itemsize != 0:
+                raise ValueError(
+                    f"Shard byte boyutu dtype ile uyumsuz: {path} "
+                    f"({os.path.getsize(path)} byte, dtype={manifest_dtype})"
+                )
+            arr = np.memmap(path, dtype=manifest_dtype, mode="r")
             n_tokens = len(arr)
+            file_token_total += n_tokens
+            declared_tokens = entry.get("tokens")
+            if declared_tokens != n_tokens:
+                raise ValueError(
+                    f"Shard token sayısı uyuşmuyor: {relative_path}; "
+                    f"manifest={declared_tokens}, dosya={n_tokens}"
+                )
             # Bir blok = max_seq_len + 1 token (input + 1 kaydırılmış label)
             n_blocks = max(0, (n_tokens - 1) // max_seq_len)
             if n_blocks == 0:
@@ -250,8 +295,15 @@ class ToprakShardDataset(Dataset):
                 f"Hiç kullanılabilir shard bulunamadı ({bin_dir}, split={split})"
             )
 
-        self.total_tokens = int(sum(len(s) for s in self.shards))
+        self.total_tokens = int(file_token_total)
         self.total_blocks = running
+
+        declared_total = meta.get("total_tokens")
+        if declared_total != self.total_tokens:
+            raise ValueError(
+                f"{split} toplam token sayısı uyuşmuyor: "
+                f"manifest={declared_total}, dosyalar={self.total_tokens}"
+            )
 
         print(
             f"📦 ToprakShardDataset[{split}] "

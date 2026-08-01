@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import unittest
 
 import numpy as np
 
@@ -62,5 +63,61 @@ def test_shard_dataset_basic():
         print("✅ ToprakShardDataset OK (18 train + 4 eval blok, shard sınırı doğru)")
 
 
+class TestShardManifestValidation(unittest.TestCase):
+    def _write_fixture(self, directory, **manifest_overrides):
+        tokens = np.arange(201, dtype=np.uint16)
+        tokens.tofile(os.path.join(directory, "train_00000.bin"))
+        manifest = {
+            "tokenizer_vocab_size": 32000,
+            "dtype": "uint16",
+            "curriculum": True,
+            "train": {
+                "shards": [{"path": "train_00000.bin", "tokens": 201}],
+                "total_tokens": 201,
+            },
+            "eval": {"shards": [], "total_tokens": 0},
+        }
+        manifest.update(manifest_overrides)
+        with open(os.path.join(directory, "manifest.json"), "w") as f:
+            json.dump(manifest, f)
+
+    def test_manifest_metadata_is_exposed_and_validated(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_fixture(d)
+            dataset = ToprakShardDataset(
+                d,
+                split="train",
+                max_seq_len=100,
+                expected_vocab_size=32000,
+            )
+            self.assertTrue(dataset.curriculum)
+            self.assertEqual(dataset.dtype, np.dtype(np.uint16))
+
+    def test_vocab_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_fixture(d)
+            with self.assertRaisesRegex(ValueError, "vocab uyuşmazlığı"):
+                ToprakShardDataset(
+                    d,
+                    split="train",
+                    max_seq_len=100,
+                    expected_vocab_size=123,
+                )
+
+    def test_declared_token_count_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._write_fixture(d)
+            manifest_path = os.path.join(d, "manifest.json")
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            manifest["train"]["shards"][0]["tokens"] = 999
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f)
+
+            with self.assertRaisesRegex(ValueError, "token sayısı uyuşmuyor"):
+                ToprakShardDataset(d, split="train", max_seq_len=100)
+
+
 if __name__ == "__main__":
     test_shard_dataset_basic()
+    unittest.main()

@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — Morfolojik Başlık (Morphological Head) Birim Testleri
@@ -101,6 +101,30 @@ class TestMorphHead(unittest.TestCase):
         loss.backward()
 
         # Gradyanları kontrol et
+        self.assertIsNotNone(model.morph_head.weight.grad)
+        self.assertTrue(torch.any(model.morph_head.weight.grad != 0.0))
+
+    def test_aux_only_loss_for_custom_ce(self):
+        """Özel CE kullanılırken morph-head kaybı ve gradyanı korunmalı."""
+        model = ToprakLM(self.config, tokenizer=self.tokenizer)
+        model.use_morph_head = True
+        model.morph_lambda = 0.5
+
+        input_ids = torch.tensor([[4, 5, 7]], dtype=torch.long)
+        targets = torch.tensor([[5, 7, 3]], dtype=torch.long)
+
+        logits, aux_loss, _ = model(
+            input_ids,
+            targets=targets,
+            compute_lm_loss=False,
+        )
+        custom_ce = torch.nn.functional.cross_entropy(
+            logits.view(-1, self.config.vocab_size),
+            targets.view(-1),
+        )
+        (custom_ce + aux_loss).backward()
+
+        self.assertGreater(aux_loss.item(), 0.0)
         self.assertIsNotNone(model.morph_head.weight.grad)
         self.assertTrue(torch.any(model.morph_head.weight.grad != 0.0))
 

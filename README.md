@@ -165,7 +165,7 @@ toprak/
 │   └── test_morph_head.py        #    Morfolojik başlık birim testleri
 │
 ├── requirements.txt              #    Python bağımlılıkları
-└── LICENSE                       #    MIT Lisansı
+└── LICENSE                       #    Apache License 2.0
 ```
 
 ---
@@ -516,7 +516,7 @@ Toprak'a katkıda bulunan herkese teşekkür ederiz! 🙏
 
 ## Lisans
 
-Bu proje [MIT Lisansı](LICENSE) altında yayınlanmıştır. Herkes özgürce kullanabilir, değiştirebilir ve dağıtabilir.
+Bu proje [Apache License 2.0](LICENSE) altında yayınlanmıştır.
 
 ---
 

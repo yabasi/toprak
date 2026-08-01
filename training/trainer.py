@@ -1,5 +1,5 @@
 # Copyright (c) 2026 Abbas Kandemir (@yabasi)
-# Licensed under the MIT License. See LICENSE file in the project root.
+# Licensed under the Apache License, Version 2.0. See LICENSE file in the project root.
 
 """
 Toprak — Trainer Sınıfı
@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional
 
 import torch
-import torch.nn.functional as F
 from torch.optim import AdamW
 
 from model.config import ModelConfig
@@ -81,6 +80,18 @@ class ToprakTrainer:
                 print("  ✓ bfloat16 mixed precision aktif (CUDA)")
             else:
                 print("  ⚠ --bf16 istendi ama desteklenmiyor (cihaz/cuda kontrolü), fp16'ya düşülüyor")
+
+        # FP16 küçük gradientleri sıfıra yuvarlayabildiğinden loss scaling
+        # gerekir. BF16'ın dinamik aralığı geniştir ve scaler kullanılmaz.
+        scaler_enabled = config.device == "cuda" and not self.use_bf16
+        if hasattr(torch, "amp") and hasattr(torch.amp, "GradScaler"):
+            self.grad_scaler = torch.amp.GradScaler(
+                "cuda", enabled=scaler_enabled
+            )
+        else:  # PyTorch 2.0–2.2 uyumluluğu
+            self.grad_scaler = torch.cuda.amp.GradScaler(
+                enabled=scaler_enabled
+            )
 
         os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -248,11 +259,21 @@ class ToprakTrainer:
                         # Morfolojik ağırlıklı kayıp — CE loss'u ayrı hesapla
                         if self.device == "cuda":
                             with torch.autocast(device_type="cuda", dtype=amp_dtype):
-                                logits, _, _ = self.model(input_ids)
+                                logits, morph_head_loss, _ = self.model(
+                                    input_ids,
+                                    targets=labels,
+                                    compute_lm_loss=False,
+                                )
                                 loss = self.morph_weight_loss(logits, labels, self.global_step)
+                                loss = loss + morph_head_loss
                         else:
-                            logits, _, _ = self.model(input_ids)
+                            logits, morph_head_loss, _ = self.model(
+                                input_ids,
+                                targets=labels,
+                                compute_lm_loss=False,
+                            )
                             loss = self.morph_weight_loss(logits, labels, self.global_step)
+                            loss = loss + morph_head_loss
                     else:
                         if self.device == "cuda":
                             with torch.autocast(device_type="cuda", dtype=amp_dtype):
@@ -280,19 +301,14 @@ class ToprakTrainer:
                         accumulation_sr_syllable_loss += sr_syllable_loss.item() / self.config.grad_accum_steps
                         accumulation_sr_rhyme_loss += sr_rhyme_loss.item() / self.config.grad_accum_steps
 
-                    # Morfolojik Başlık Auxiliary Loss
+                    # Morfolojik Başlık metriği. Kayıp model forward'ında
+                    # eklenir; morph-weight yolunda da targets geçirildiği için
+                    # başlık aynı şekilde eğitilir.
                     if getattr(model_orig, 'use_morph_head', False):
-                        morph_logits = getattr(model_orig, '_last_morph_logits', None)
-                        if morph_logits is not None:
-                            mh_loss_val = F.cross_entropy(
-                                morph_logits.view(-1, 3),
-                                model_orig.token_morph_classes[labels].view(-1),
-                                ignore_index=self.config.pad_token_id,
-                            )
-                            if self.morph_weight_loss is not None:
-                                # Model forward'ında targets verilmediği için loss'a burada ekle
-                                loss = loss + model_orig.morph_lambda * mh_loss_val
-                            accumulation_mh_loss += mh_loss_val.item() / self.config.grad_accum_steps
+                        accumulation_mh_loss += (
+                            model_orig._last_morph_loss
+                            / self.config.grad_accum_steps
+                        )
 
                     # NaN/Inf loss kontrolü
                     if torch.isnan(loss) or torch.isinf(loss):
@@ -301,7 +317,7 @@ class ToprakTrainer:
 
                     # Gradient accumulation: loss'u böl
                     loss = loss / self.config.grad_accum_steps
-                    loss.backward()
+                    self.grad_scaler.scale(loss).backward()
                     accumulation_loss += loss.item()
                     tokens_processed += input_ids.numel()
 
@@ -335,6 +351,7 @@ class ToprakTrainer:
                 self.consecutive_nan_count = 0
 
                 # Gradient clipping
+                self.grad_scaler.unscale_(self.optimizer)
                 grad_norm = torch.nn.utils.clip_grad_norm_(
                     self.model.parameters(), self.config.gradient_clip
                 )
@@ -342,6 +359,7 @@ class ToprakTrainer:
                 # NaN gradient kontrolü
                 if isinstance(grad_norm, torch.Tensor) and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
                     self.optimizer.zero_grad()
+                    self.grad_scaler.update()
                     lr = self.scheduler.step()
                     self.global_step += 1
                     print(f"  ⚠ Step {self.global_step}: NaN gradient norm, step atlanıyor")
@@ -354,7 +372,8 @@ class ToprakTrainer:
                     continue
 
                 # Optimizer step
-                self.optimizer.step()
+                self.grad_scaler.step(self.optimizer)
+                self.grad_scaler.update()
                 lr = self.scheduler.step()
                 self.global_step += 1
 
@@ -501,6 +520,7 @@ class ToprakTrainer:
         checkpoint = {
             "model_state_dict": model_to_save.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
+            "grad_scaler_state_dict": self.grad_scaler.state_dict(),
             "scheduler_state_dict": self.scheduler.state_dict(),
             "global_step": self.global_step,
             "best_eval_loss": self.best_eval_loss,
@@ -534,6 +554,9 @@ class ToprakTrainer:
 
         model_to_load.load_state_dict(checkpoint["model_state_dict"], strict=False)
         self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scaler_state = checkpoint.get("grad_scaler_state_dict")
+        if scaler_state:
+            self.grad_scaler.load_state_dict(scaler_state)
 
         # Optimizer state'lerini doğru device'a taşı (CPU → MPS fix)
         for state in self.optimizer.state.values():
