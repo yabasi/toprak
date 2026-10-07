@@ -205,7 +205,77 @@ def parse_args():
         help="Hece ve kafiye loss warmup adım sayısı (varsayılan: 1000)"
     )
 
+    # ─── Mimari yükseltmeler (varsayılan: kapalı) ───
+    parser.add_argument(
+        "--mtp-heads", type=int, default=None,
+        help="Çoklu token tahmini başlık sayısı (ör. 2-4; spekülatif çözümleme için)"
+    )
+    parser.add_argument(
+        "--mtp-lambda", type=float, default=None,
+        help="MTP kayıp ağırlığı (varsayılan: 0.3)"
+    )
+    parser.add_argument(
+        "--num-experts", type=int, default=None,
+        help="MoE uzman sayısı (0 = yoğun FFN; ör. 8)"
+    )
+    parser.add_argument(
+        "--experts-top-k", type=int, default=None,
+        help="Token başına aktif uzman sayısı (varsayılan: 2)"
+    )
+    parser.add_argument(
+        "--moe-layer-freq", type=int, default=None,
+        help="Her kaçıncı blok MoE olsun (1 = tüm bloklar)"
+    )
+    parser.add_argument(
+        "--no-moe-morph-routing", action="store_true",
+        help="MoE yönlendiricisinde morfolojik sınıf ipucunu kapat"
+    )
+    parser.add_argument(
+        "--max-seq-len", type=int, default=None,
+        help="Eğitim bağlam uzunluğu (uzun bağlam devam eğitimi için)"
+    )
+    parser.add_argument(
+        "--rope-scaling", type=str, default=None, choices=["linear", "ntk", "yarn"],
+        help="RoPE bağlam genişletme yöntemi"
+    )
+    parser.add_argument(
+        "--rope-factor", type=float, default=None,
+        help="RoPE ölçek faktörü (yeni bağlam / orijinal bağlam)"
+    )
+    parser.add_argument(
+        "--rope-original-max-seq-len", type=int, default=None,
+        help="Modelin ön eğitildiği bağlam uzunluğu (YaRN için)"
+    )
+
     return parser.parse_args()
+
+
+def apply_architecture_overrides(config, args) -> None:
+    """MTP / MoE / uzun bağlam CLI argümanlarını konfigürasyona uygula."""
+    if getattr(args, "mtp_heads", None) is not None:
+        config.num_mtp_heads = args.mtp_heads
+    if getattr(args, "mtp_lambda", None) is not None:
+        config.mtp_lambda = args.mtp_lambda
+    if getattr(args, "num_experts", None) is not None:
+        config.num_experts = args.num_experts
+    if getattr(args, "experts_top_k", None) is not None:
+        config.experts_top_k = args.experts_top_k
+    if getattr(args, "moe_layer_freq", None) is not None:
+        config.moe_layer_freq = args.moe_layer_freq
+    if getattr(args, "no_moe_morph_routing", False):
+        config.moe_morph_routing = False
+    if getattr(args, "max_seq_len", None) is not None:
+        original_len = config.max_seq_len
+        config.max_seq_len = args.max_seq_len
+    else:
+        original_len = config.max_seq_len
+    if getattr(args, "rope_scaling", None):
+        factor = args.rope_factor or max(config.max_seq_len / original_len, 1.0)
+        config.rope_scaling = {
+            "type": args.rope_scaling,
+            "factor": float(factor),
+            "original_max_seq_len": int(args.rope_original_max_seq_len or original_len),
+        }
 
 
 def build_training_recipe(args, config) -> dict:
@@ -293,6 +363,7 @@ def main():
         config.grad_accum_steps = args.grad_accum
     if args.save_every:
         config.save_every = args.save_every
+    apply_architecture_overrides(config, args)
     if args.device:
         config.device = args.device
     else:

@@ -21,6 +21,7 @@ from torch.utils.checkpoint import checkpoint as grad_checkpoint
 
 from model.attention import GroupedQueryAttention
 from model.config import ModelConfig
+from model.moe import MorphRoutedMoE
 from model.norms import RMSNorm
 from model.rope import precompute_freqs_cis
 
@@ -47,6 +48,27 @@ class SwiGLUFeedForward(nn.Module):
         return self.down_proj(F.silu(self.gate_proj(x)) * self.up_proj(x))
 
 
+class MTPHead(nn.Module):
+    """
+    Çoklu token tahmini başlığı (Medusa/DeepSeek-MTP esinli, hafif).
+
+    h → h + W2·SiLU(W1·RMSNorm(h)) → RMSNorm → (ortak lm_head)
+    W2 sıfırla başlatılır: eğitimin başında başlık, ana başlığın
+    gizli durumunu aynen kullanır ve kararlı biçimde ayrışır.
+    """
+
+    def __init__(self, config: ModelConfig):
+        super().__init__()
+        self.norm_in = RMSNorm(config.d_model, eps=config.norm_eps)
+        self.proj_in = nn.Linear(config.d_model, config.d_model, bias=False)
+        self.proj_out = nn.Linear(config.d_model, config.d_model, bias=False)
+        self.norm_out = RMSNorm(config.d_model, eps=config.norm_eps)
+
+    def forward(self, h):
+        h = h + self.proj_out(F.silu(self.proj_in(self.norm_in(h))))
+        return self.norm_out(h)
+
+
 class TransformerBlock(nn.Module):
     """
     Pre-RMSNorm Transformer bloğu.
@@ -55,20 +77,30 @@ class TransformerBlock(nn.Module):
     RMSNorm → SwiGLU FFN → Residual
     """
 
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: ModelConfig, use_moe: bool = False):
         super().__init__()
         self.ln1 = RMSNorm(config.d_model, eps=config.norm_eps)
         self.attn = GroupedQueryAttention(config)
         self.ln2 = RMSNorm(config.d_model, eps=config.norm_eps)
-        self.ffn = SwiGLUFeedForward(config)
+        self.use_moe = use_moe
+        self.ffn = MorphRoutedMoE(config) if use_moe else SwiGLUFeedForward(config)
+        self.last_aux_loss = None
 
-    def forward(self, x, freqs_cis, past_kv=None, use_checkpoint=False):
+    def _ffn(self, h, morph_classes):
+        if self.use_moe:
+            out, aux = self.ffn(h, morph_classes)
+            self.last_aux_loss = aux
+            return out
+        return self.ffn(h)
+
+    def forward(self, x, freqs_cis, past_kv=None, use_checkpoint=False, morph_classes=None):
         """
         Args:
             x: (B, T, d_model)
             freqs_cis: RoPE frekansları
             past_kv: KV cache (opsiyonel)
             use_checkpoint: Gradient checkpointing kullan (eğitimde bellek tasarrufu)
+            morph_classes: (B, T) giriş token sınıfları — MoE yönlendirme ipucu
 
         Returns:
             x: (B, T, d_model)
@@ -79,10 +111,10 @@ class TransformerBlock(nn.Module):
         x = x + attn_out
 
         # Pre-RMSNorm → SwiGLU FFN → Residual (gradient checkpointing opsiyonel)
-        if use_checkpoint and self.training:
+        if use_checkpoint and self.training and not self.use_moe:
             x = x + grad_checkpoint(self.ffn, self.ln2(x), use_reentrant=False)
         else:
-            x = x + self.ffn(self.ln2(x))
+            x = x + self._ffn(self.ln2(x), morph_classes)
 
         return x, present_kv
 
@@ -111,9 +143,12 @@ class ToprakLM(nn.Module):
         # Token embedding (positional embedding yok — RoPE kullanılıyor)
         self.tok_emb = nn.Embedding(config.vocab_size, config.d_model)
 
-        # Transformer blokları
+        # Transformer blokları (MoE açıksa her moe_layer_freq'inci blok MoE)
+        def _is_moe(layer_idx):
+            return config.num_experts > 0 and (layer_idx + 1) % max(config.moe_layer_freq, 1) == 0
+
         self.blocks = nn.ModuleList([
-            TransformerBlock(config) for _ in range(config.num_layers)
+            TransformerBlock(config, use_moe=_is_moe(i)) for i in range(config.num_layers)
         ])
 
         # Son RMSNorm
@@ -124,6 +159,16 @@ class ToprakLM(nn.Module):
 
         # Weight tying — embedding ve lm_head aynı ağırlıkları paylaşır
         self.tok_emb.weight = self.lm_head.weight
+
+        # ─── Çoklu Token Tahmini (MTP) başlıkları ───
+        # Başlık k (1..K), son gizli durumdan t+k+1. token'ı tahmin eder.
+        # Ortak lm_head kullanılır; her başlık hafif bir artık blok taşır.
+        # Çıkarımda kendi kendine spekülatif çözümleme için taslak üretir.
+        self.mtp_heads = nn.ModuleList([
+            MTPHead(config) for _ in range(config.num_mtp_heads)
+        ])
+        self._last_mtp_loss = 0.0
+        self._last_moe_aux_loss = 0.0
 
         # ─── Morfolojik Başlık & Sınıflandırma ───
         self.morph_head = nn.Linear(config.d_model, 3, bias=False)
@@ -163,8 +208,9 @@ class ToprakLM(nn.Module):
         # RoPE frekanslarını önceden hesapla ve buffer olarak kaydet
         freqs_cis = precompute_freqs_cis(
             dim=config.head_dim,
-            max_seq_len=config.max_seq_len * 2,  # Güvenlik payı
+            max_seq_len=config.rope_max_positions,  # Güvenlik payı
             theta=config.rope_theta,
+            rope_scaling=config.rope_scaling,
         )
         self.register_buffer("freqs_cis", freqs_cis, persistent=False)
 
@@ -175,6 +221,23 @@ class ToprakLM(nn.Module):
         for name, p in self.named_parameters():
             if name.endswith("out_proj.weight") or name.endswith("down_proj.weight"):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / (2 * config.num_layers) ** 0.5)
+        for head in self.mtp_heads:
+            torch.nn.init.zeros_(head.proj_out.weight)
+
+    def _apply(self, fn, *args, **kwargs):
+        """
+        RoPE tablosu complex tensördür; model.half() / .to(torch.bfloat16)
+        gibi dtype dönüşümleri onu gerçel sayıya çevirip sessizce bozar.
+        Dönüşümden sonra tabloyu yalnız cihaz olarak taşı, dtype'ı koru.
+        """
+        freqs_cis = self._buffers.pop("freqs_cis")
+        try:
+            super()._apply(fn, *args, **kwargs)
+        finally:
+            self.register_buffer(
+                "freqs_cis", freqs_cis.to(self.lm_head.weight.device), persistent=False
+            )
+        return self
 
     def _init_weights(self, module):
         """Ağırlık başlatma."""
@@ -191,6 +254,7 @@ class ToprakLM(nn.Module):
         targets=None,
         past_kvs=None,
         compute_lm_loss=True,
+        return_hidden=False,
     ):
         """
         Args:
@@ -200,11 +264,14 @@ class ToprakLM(nn.Module):
             compute_lm_loss: False ise standart CE hesaplanmaz; targets yine
                 auxiliary başlıklar için kullanılır. Özel CE loss'larıyla
                 birlikte morph-head eğitimi için kullanılır.
+            return_hidden: True ise son RMSNorm sonrası gizli durumlar da
+                döndürülür (MTP taslakları ve analiz araçları için).
 
         Returns:
             logits: (batch_size, seq_len, vocab_size)
             loss: scalar (eğer targets verilmişse)
             present_kvs: list of (k, v) — güncel KV cache
+            hidden: (batch_size, seq_len, d_model) — yalnız return_hidden=True ise
         """
         B, T = input_ids.shape
 
@@ -217,7 +284,17 @@ class ToprakLM(nn.Module):
         else:
             past_len = 0
 
+        if past_len + T > self.freqs_cis.size(0):
+            raise ValueError(
+                f"Dizi uzunluğu ({past_len + T}) RoPE tablosunu "
+                f"({self.freqs_cis.size(0)}) aşıyor; bağlamı kırpın veya "
+                f"max_seq_len / rope_scaling ile bağlamı genişletin."
+            )
         freqs_cis = self.freqs_cis[past_len:past_len + T]
+
+        morph_classes = None
+        if self.config.num_experts > 0:
+            morph_classes = self.token_morph_classes[input_ids]
 
         # Transformer blokları
         present_kvs = []
@@ -226,6 +303,7 @@ class ToprakLM(nn.Module):
             x, present_kv = block(
                 x, freqs_cis, past_kv,
                 use_checkpoint=self.gradient_checkpointing,
+                morph_classes=morph_classes,
             )
             present_kvs.append(present_kv)
 
@@ -248,17 +326,62 @@ class ToprakLM(nn.Module):
                 loss = logits.new_zeros(())
 
             # Morfolojik çoklu görev kaybı (auxiliary loss)
+            # NOT: Sınıf etiketi 0 = kök olduğu için pad maskesi sınıf
+            # etiketinden değil, hedef token ID'sinden kurulur. (Eskiden
+            # ignore_index=pad_token_id=0 tüm kök tokenlarını kayıptan
+            # düşürüyor, pad tokenlarını ise "özel" sınıfı olarak eğitiyordu.)
             if self.use_morph_head:
                 morph_logits = self.morph_head(x)  # (B, T, 3)
+                morph_targets = self.token_morph_classes[targets].masked_fill(
+                    targets == self.config.pad_token_id, -100
+                )
                 morph_loss = F.cross_entropy(
                     morph_logits.view(-1, 3),
-                    self.token_morph_classes[targets].view(-1),
-                    ignore_index=self.config.pad_token_id,
+                    morph_targets.view(-1),
+                    ignore_index=-100,
                 )
                 self._last_morph_loss = morph_loss.item()
                 loss = loss + self.morph_lambda * morph_loss
 
+            # Çoklu token tahmini kaybı: başlık k, t+k+1 token'ını tahmin eder
+            if len(self.mtp_heads) > 0:
+                mtp_losses = []
+                for k, head in enumerate(self.mtp_heads, start=1):
+                    if T <= k:
+                        break
+                    mtp_logits = self.lm_head(head(x[:, :-k]))
+                    mtp_losses.append(F.cross_entropy(
+                        mtp_logits.reshape(-1, self.config.vocab_size),
+                        targets[:, k:].reshape(-1),
+                        ignore_index=self.config.pad_token_id,
+                    ))
+                if mtp_losses:
+                    mtp_loss = torch.stack(mtp_losses).mean()
+                    self._last_mtp_loss = mtp_loss.item()
+                    loss = loss + self.config.mtp_lambda * mtp_loss
+
+            # MoE yük dengeleme kaybı
+            moe_aux = [b.last_aux_loss for b in self.blocks if b.use_moe and b.last_aux_loss is not None]
+            if moe_aux:
+                moe_loss = torch.stack(moe_aux).mean()
+                self._last_moe_aux_loss = moe_loss.item()
+                loss = loss + self.config.moe_aux_loss_coef * moe_loss
+
+        if return_hidden:
+            return logits, loss, present_kvs, x
         return logits, loss, present_kvs
+
+    def mtp_logits(self, hidden: torch.Tensor) -> list:
+        """
+        MTP başlıklarının logit'leri.
+
+        Args:
+            hidden: (B, T, d_model) — forward(return_hidden=True) çıktısı
+
+        Returns:
+            [ (B, T, V), ... ] — başlık k için t+k+1 tahmini
+        """
+        return [self.lm_head(head(hidden)) for head in self.mtp_heads]
 
     def count_parameters(self) -> int:
         """Toplam eğitilebilir parametre sayısı."""

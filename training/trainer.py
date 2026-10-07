@@ -525,6 +525,10 @@ class ToprakTrainer:
                             self.writer.add_scalar("train/sr_rhyme_loss", avg_sr_rhyme_loss, self.global_step)
                         if getattr(model_orig, 'use_morph_head', False):
                             self.writer.add_scalar("train/mh_loss", avg_mh_loss, self.global_step)
+                        if model_orig.config.num_mtp_heads > 0:
+                            self.writer.add_scalar("train/mtp_loss", model_orig._last_mtp_loss, self.global_step)
+                        if model_orig.config.num_experts > 0:
+                            self.writer.add_scalar("train/moe_aux_loss", model_orig._last_moe_aux_loss, self.global_step)
                         if self.morph_weight_loss is not None:
                             self.writer.add_scalar("train/root_loss", self.morph_weight_loss._last_root_loss, self.global_step)
                             self.writer.add_scalar("train/suffix_loss", self.morph_weight_loss._last_suffix_loss, self.global_step)
@@ -647,17 +651,7 @@ class ToprakTrainer:
             "experiment_manifest": self.experiment_manifest,
             "rng_state": rng_state or self._capture_rng_state(),
             "data_state": data_state or self._capture_data_state(),
-            "config": {
-                "vocab_size": self.config.vocab_size,
-                "d_model": self.config.d_model,
-                "num_heads": self.config.num_heads,
-                "num_kv_heads": self.config.num_kv_heads,
-                "num_layers": self.config.num_layers,
-                "d_ff": self.config.d_ff,
-                "max_seq_len": self.config.max_seq_len,
-                "rope_theta": self.config.rope_theta,
-                "norm_eps": self.config.norm_eps,
-            },
+            "config": self.config.architecture_dict(),
         }
 
         torch.save(checkpoint, filepath)

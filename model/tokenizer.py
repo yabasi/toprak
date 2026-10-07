@@ -17,6 +17,7 @@ def train_tokenizer(
     vocab_size: int = 32_000,
     model_type: str = "bpe",
     character_coverage: float = 0.9999,
+    extra_symbols: Optional[List[str]] = None,
 ):
     """
     SentencePiece BPE tokenizer eğitimi.
@@ -27,7 +28,12 @@ def train_tokenizer(
         vocab_size: Kelime dağarcığı büyüklüğü
         model_type: 'bpe' veya 'unigram'
         character_coverage: Karakter kapsama oranı (Türkçe için yüksek tutulmalı)
+        extra_symbols: Ek özel tokenlar (varsayılan: sohbet şablonu tokenları;
+            bkz. model/chat_template.py). [] verilirse yalnız temel semboller.
     """
+    if extra_symbols is None:
+        from model.chat_template import CHAT_SPECIAL_TOKENS
+        extra_symbols = list(CHAT_SPECIAL_TOKENS)
     spm.SentencePieceTrainer.train(
         input=input_file,
         model_prefix=model_prefix,
@@ -38,7 +44,7 @@ def train_tokenizer(
         unk_id=1,
         bos_id=2,
         eos_id=3,
-        user_defined_symbols=["<sep>", "<cls>", "<mask>"],
+        user_defined_symbols=["<sep>", "<cls>", "<mask>"] + list(extra_symbols),
         normalization_rule_name="nfkc",
         # Türkçe morfolojisi için
         split_by_unicode_script=True,

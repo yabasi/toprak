@@ -97,14 +97,25 @@ class GroupedQueryAttention(nn.Module):
 
         S = k.size(2)  # Toplam sequence uzunluğu (past + current)
 
+        # Causal maske:
+        # - Prefill (cache yok): SDPA'nın is_causal bayrağı yeterli.
+        # - Tek token decode: yeni token tüm geçmişi görebilir, maske gerekmez.
+        # - Cache + T>1 (spekülatif doğrulama, parça parça prefill): SDPA'nın
+        #   is_causal'ı sol-üst hizalı olduğu için yanlış olur; sağ-alt hizalı
+        #   açık bir maske kurulur (True = görülebilir).
+        attn_mask = None
+        is_causal = past_kv is None and T > 1
+        if past_kv is not None and T > 1:
+            attn_mask = torch.ones(T, S, device=x.device, dtype=torch.bool).tril(diagonal=S - T)
+
         # Scaled Dot-Product Attention — PyTorch native SDPA
         # FlashAttention / memory-efficient attention otomatik seçilir
         try:
             attn_output = F.scaled_dot_product_attention(
                 q, k, v,
-                attn_mask=None,
+                attn_mask=attn_mask,
                 dropout_p=0.0,
-                is_causal=(past_kv is None),  # Sadece prefill'de causal mask
+                is_causal=is_causal,
             )
         except RuntimeError:
             # SDPA desteklenmiyorsa manual fallback

@@ -9,7 +9,8 @@ Modern mimari: RMSNorm, SwiGLU, RoPE, GQA
 Multi-device: MPS (Apple Silicon) / CUDA (NVIDIA) / CPU
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Optional
 import torch
 
 
@@ -39,8 +40,26 @@ class ModelConfig:
     # RoPE
     rope_theta: float = 10000.0    # RoPE base frekansı
 
+    # Uzun bağlam: RoPE ölçekleme (None = kapalı)
+    # Örnek: {"type": "yarn", "factor": 8.0, "original_max_seq_len": 4096}
+    # Desteklenen tipler: "linear", "ntk", "yarn"
+    rope_scaling: Optional[dict] = None
+
     # RMSNorm
     norm_eps: float = 1e-6         # RMSNorm epsilon
+
+    # Çoklu Token Tahmini (MTP) — 0 = kapalı
+    # k>0 ise model t+2 ... t+k+1 tokenlarını da tahmin eden k ek başlık taşır.
+    num_mtp_heads: int = 0
+    mtp_lambda: float = 0.3        # MTP kayıplarının toplam ağırlığı
+
+    # Uzman Karışımı (MoE) — 0 = yoğun (dense) SwiGLU
+    num_experts: int = 0
+    experts_top_k: int = 2
+    moe_d_ff: Optional[int] = None         # Uzman başına FFN boyutu (None → d_ff // top_k)
+    moe_morph_routing: bool = True         # Yönlendiriciye kök/ek/özel ipucu ekle
+    moe_aux_loss_coef: float = 0.01        # Yük dengeleme kaybı katsayısı
+    moe_layer_freq: int = 1                # Her kaçıncı blok MoE olsun (1 = hepsi)
 
     # Özel tokenler
     pad_token_id: int = 0
@@ -73,6 +92,22 @@ class ModelConfig:
         assert self.d_model % self.num_heads == 0, \
             f"d_model ({self.d_model}) num_heads'e ({self.num_heads}) tam bölünmeli"
         return self.d_model // self.num_heads
+
+    @property
+    def rope_max_positions(self) -> int:
+        """RoPE tablosunun kapsadığı pozisyon sayısı (güvenlik payı dahil)."""
+        return self.max_seq_len * 2
+
+    def architecture_dict(self) -> dict:
+        """Checkpoint'e yazılan mimari alanlar (modeli yeniden kurmak için yeterli)."""
+        keys = [
+            "vocab_size", "d_model", "num_heads", "num_kv_heads", "num_layers",
+            "d_ff", "max_seq_len", "rope_theta", "rope_scaling", "norm_eps",
+            "pad_token_id", "bos_token_id", "eos_token_id",
+            "num_mtp_heads", "mtp_lambda", "num_experts", "experts_top_k",
+            "moe_d_ff", "moe_morph_routing", "moe_aux_loss_coef", "moe_layer_freq",
+        ]
+        return {key: getattr(self, key) for key in keys}
 
     @property
     def device_type(self) -> str:
