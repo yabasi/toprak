@@ -20,6 +20,7 @@ Sıfırdan Türkçe dil modeli geliştirme rehberi.
 12. [Eğitim Parametreleri](#12-eğitim-parametreleri)
 13. [RTX 4090 Sunucuda Eğitim](#13-rtx-4090-sunucuda-eğitim)
 14. [Sık Karşılaşılan Sorunlar](#14-sık-karşılaşılan-sorunlar)
+15. [Yeni Nesil Yetenekler](#15-yeni-nesil-yetenekler)
 
 ---
 
@@ -320,6 +321,20 @@ python3 inference/chat.py \
 - `temizle` → Sohbet geçmişini sıfırla
 - `ayar` → Temperature, top-k, top-p değiştir
 
+### Sistem mesajı ve dilbilgisi koruması
+
+```bash
+python3 inference/chat.py \
+  --checkpoint checkpoints/toprak_dpo.pt \
+  --system "Sen yardımsever ve dürüst bir Türkçe asistansın." \
+  --grammar-guard mask
+```
+
+Sohbet, eğitimdeki sohbet şablonunun aynısını kullanır ve uzun geçmişi
+modelin bağlamına sığacak şekilde en eski turlardan kırpar. Ham ön eğitim
+checkpoint'i sohbet formatını bilmez; önce [ALIGNMENT.md](ALIGNMENT.md)
+içindeki SFT adımını uygulayın.
+
 ---
 
 ## 8. Model Değerlendirme
@@ -553,6 +568,104 @@ pip install tensorboard "setuptools<82"
 
 ---
 
+## 15. Yeni Nesil Yetenekler
+
+Tüm yetenekler varsayılan olarak kapalıdır. Ayrıntılı açıklama ve
+sınırlamalar ilgili belgededir.
+
+### Mimari: MTP, MoE, uzun bağlam
+
+```bash
+# Çoklu token tahmini (spekülatif çözümleme için) + morfoloji yönlendirmeli MoE
+python3 training/train.py --model-size medium --mtp-heads 3 --num-experts 8 --experts-top-k 2
+
+# Yalnız ağırlıkla başlat (taze LR programı): MTP ekleme, yoğun→MoE upcycling
+python3 training/train.py --model-size medium --init-from checkpoints/toprak_best.pt \
+  --num-experts 8 --moe-d-ff 2048 --lr 1e-4 --warmup-steps 200 --max-steps 5000
+
+# 2K → 16K bağlam (YaRN)
+python3 training/train.py --model-size large --init-from checkpoints/toprak_best.pt \
+  --max-seq-len 16384 --rope-scaling yarn --rope-original-max-seq-len 2048 \
+  --lr 2e-5 --warmup-steps 50 --max-steps 1000
+python3 scripts/passkey_eval.py --checkpoint checkpoints/toprak_last.pt
+
+# Spekülatif çözümleme (MTP yoksa n-gram taslakları)
+python3 inference/speculative.py --checkpoint checkpoints/toprak_best.pt --compare
+```
+
+→ [ARCHITECTURE_UPGRADES.md](ARCHITECTURE_UPGRADES.md),
+[LONG_CONTEXT_RAG.md](LONG_CONTEXT_RAG.md)
+
+### Türkçe dilbilgisi: arşifonemik ekler ve koruma
+
+```bash
+python3 inference/generate.py --prompt "Kitap" --grammar-guard mask
+python3 scripts/archiphoneme_corpus.py --help
+python3 evaluation/harmony_check.py --help
+```
+
+→ [MORPHOPHONOLOGY.md](MORPHOPHONOLOGY.md)
+
+### Hizalama ve akıl yürütme
+
+```bash
+python3 training/sft.py --base-checkpoint checkpoints/toprak_best.pt \
+  --data alignment/examples/sft_sample.jsonl --output checkpoints/toprak_sft.pt --lora-r 16
+python3 alignment/constitutional.py --checkpoint checkpoints/toprak_sft.pt \
+  --prompts alignment/examples/prompts.txt --output data/pairs.jsonl
+python3 training/dpo.py --base-checkpoint checkpoints/toprak_sft.pt \
+  --data data/pairs.jsonl --output checkpoints/toprak_dpo.pt
+python3 data/synthetic_math.py --output-dir data/reasoning --train 20000 --test 500
+python3 training/grpo.py --checkpoint checkpoints/toprak_dpo.pt \
+  --data data/reasoning/train.jsonl --output checkpoints/grpo
+```
+
+→ [ALIGNMENT.md](ALIGNMENT.md), [REASONING.md](REASONING.md)
+
+### Kaynak gösteren RAG
+
+```bash
+python3 -m rag.cli index --docs rag/examples --out rag_index.json
+python3 -m rag.cli ask --index rag_index.json --checkpoint checkpoints/toprak_dpo.pt \
+  --query "Bir üye aynı anda en fazla kaç materyal ödünç alabilir?" --speculative
+```
+
+→ [LONG_CONTEXT_RAG.md](LONG_CONTEXT_RAG.md)
+
+### Türk dilleri
+
+```bash
+python3 evaluation/turkic_tokenizer_report.py --tokenizer current=toprak_tokenizer.model
+python3 scripts/train_turkic_tokenizer.py --input-dir data/turkic --total-lines 2000000
+```
+
+→ [TURKIC.md](TURKIC.md)
+
+### Cihazda çalıştırma
+
+```bash
+python3 training/distill.py --teacher checkpoints/large_best.pt --student-size small \
+  --data-dir data_cache/bin --bin-mode
+python3 -m export.quantize --checkpoint checkpoints/toprak_best.pt --bits 4 --group-size 64 --out q4.pt
+python3 -m export.hf_llama --checkpoint checkpoints/toprak_best.pt --out export/toprak-hf --dtype float16
+# sonra: llama.cpp convert_hf_to_gguf.py / mlx_lm.convert (EDGE.md)
+```
+
+→ [EDGE.md](EDGE.md)
+
+### Morfoloji Mikroskobu
+
+```bash
+python3 -m interpret.cli probe --checkpoint checkpoints/toprak_best.pt \
+  --tokenizer toprak_tokenizer.model --texts interpret/examples/sentences.txt --out reports/probe
+python3 -m interpret.cli compare --checkpoint-a ablation_runs/run_001/baseline/toprak_last.pt \
+  --checkpoint-b ablation_runs/run_001/vowel_harmony/toprak_last.pt --out reports/compare
+```
+
+→ [INTERPRETABILITY.md](INTERPRETABILITY.md)
+
+---
+
 ## 🗺️ Tipik Geliştirme Akışı
 
 ```
@@ -581,6 +694,12 @@ pip install tensorboard "setuptools<82"
 
 8. HuggingFace'e yükle
    └── python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt
+
+9. Asistana dönüştür (talimat eğitimi → hizalama → sohbet)
+   └── python3 training/sft.py ... → python3 training/dpo.py ... → python3 inference/chat.py ...
+
+10. Cihaza taşı
+   └── python3 -m export.hf_llama ... → GGUF / MLX
 ```
 
 ---

@@ -37,6 +37,8 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 > **💡 Bu bir ticari ürün değil, bir araştırma ve milli katkı projesidir.** Türkiye'de yapay zeka alanında bağımsız üretim kapasitesini geliştirmek için atılmış bir adımdır.
 
 > 📖 **Kapsamlı kullanım rehberi için:** [GUIDE.md](GUIDE.md). Yardımcı kayıplar için [ABLATION.md](ABLATION.md), tokenizer karşılaştırması için [TOKENIZER_ANALYSIS.md](TOKENIZER_ANALYSIS.md), deney tekrarları için [REPRODUCIBILITY.md](REPRODUCIBILITY.md), veri karışımı için [DATA_MIXTURE.md](DATA_MIXTURE.md) dosyasına bakın.
+>
+> 🚀 **Yeni nesil yetenekler:** [ARCHITECTURE_UPGRADES.md](ARCHITECTURE_UPGRADES.md) (MTP, MoE, YaRN, spekülatif çözümleme) · [MORPHOPHONOLOGY.md](MORPHOPHONOLOGY.md) (arşifonemik ekler, dilbilgisi koruması) · [ALIGNMENT.md](ALIGNMENT.md) (SFT, DPO, Toprak Anayasası) · [REASONING.md](REASONING.md) (GRPO) · [LONG_CONTEXT_RAG.md](LONG_CONTEXT_RAG.md) (32K bağlam, kaynak gösteren RAG) · [TURKIC.md](TURKIC.md) (Türk dilleri) · [EDGE.md](EDGE.md) (cihazda çalıştırma) · [INTERPRETABILITY.md](INTERPRETABILITY.md) (Morfoloji Mikroskobu)
 
 ---
 
@@ -65,6 +67,11 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 | **Morfolojik Kayıp** | Ek tokenlerine ağırlıklı CE Loss (dünyada ilk, opsiyonel) |
 | **Morfolojik Başlık** | Kök, Ek ve Özel Çoklu Görev (Multi-task) Sınıflandırma Başlığı (dünyada ilk, opsiyonel) |
 | **Hece & Kafiye** | Türkçe Hece Ölçüsü ve Kafiye Uyumu Auxiliary Loss (dünyada ilk, opsiyonel) |
+| **Çoklu Token Tahmini** | MTP başlıkları + kendi kendine spekülatif çözümleme (opsiyonel) |
+| **Uzman Karışımı** | Morfoloji yönlendirmeli MoE + yoğun→MoE upcycling (opsiyonel) |
+| **Uzun Bağlam** | RoPE ölçekleme: linear / NTK / YaRN (opsiyonel) |
+| **Hizalama** | Sohbet şablonu, SFT + LoRA, DPO/ORPO, Toprak Anayasası, GRPO |
+| **Dağıtım** | HF Llama dışa aktarımı (GGUF/MLX yolu), int8/int4, damıtma |
 
 ---
 
@@ -119,6 +126,58 @@ Dünya genelinde yüzlerce dil modeli geliştirilirken, **Türkçe için sıfır
 
 ---
 
+## Yeni Nesil Yetenekler
+
+Toprak'ı Türkçeye özgü bir araştırma modelinden uçtan uca bir asistana
+taşıyan on yetenek. Hepsi **varsayılan olarak kapalıdır**: mevcut
+checkpoint'ler ve komutlar aynen çalışır. Her biri birim ve entegrasyon
+testleriyle doğrulanmıştır.
+
+| # | Yetenek | Ne sağlar? | Belge |
+|---|---|---|---|
+| 1 | **Arşifonemik ekler** | Ekleri soyut biçimde (`+lAr`, `+DA`, `+(y)A`) temsil eden kayıpsız kodek. Ünlü uyumu ve ünsüz benzeşmesi kurallı bir katmanda gerçekleşir, uyum hatası yapısal olarak imkânsızlaşır | [MORPHOPHONOLOGY.md](MORPHOPHONOLOGY.md) |
+| 2 | **Dilbilgisi korumalı üretim** | Eğitim gerektirmeyen logit işlemcisi. Uyumsuz ek tokenlarını maskeler (`--grammar-guard mask`) | [MORPHOPHONOLOGY.md](MORPHOPHONOLOGY.md) |
+| 3 | **Çoklu Token Tahmini + spekülatif çözümleme** | Model kelimenin geri kalan eklerini önceden tahmin eder. Taslaklar tek ileri geçişte doğrulanır ve çıktı greedy ile birebir aynıdır | [ARCHITECTURE_UPGRADES.md](ARCHITECTURE_UPGRADES.md) |
+| 4 | **Morfoloji yönlendirmeli MoE** | Kök, ek ve özel ipuçlu uzman karışımı. Örneğin Medium, aynı aktif hesapla 352M toplam parametreye çıkar | [ARCHITECTURE_UPGRADES.md](ARCHITECTURE_UPGRADES.md) |
+| 5 | **Toprak-Sohbet** | Sohbet şablonu, SFT + LoRA, DPO/ORPO ve 15 ilkeli **Toprak Anayasası** ile öz-düzeltme | [ALIGNMENT.md](ALIGNMENT.md) |
+| 6 | **Düşünen Toprak** | Lisans sorunu olmayan sentetik Türkçe matematik verisi, doğrulanabilir ödüller, `<düşünce>` formatı ve GRPO | [REASONING.md](REASONING.md) |
+| 7 | **32K bağlam + kaynak gösteren RAG** | YaRN ile bağlam genişletme, passkey testi, madde bazlı mevzuat arama ve alıntı doğrulama | [LONG_CONTEXT_RAG.md](LONG_CONTEXT_RAG.md) |
+| 8 | **Türk Dünyası** | 12 Türk dili için kayıt, betik tespiti, Kiril ve Arap harflerinden transliterasyon, Osmanlıca paralel veri ve dil başına tokenizer ölçümü | [TURKIC.md](TURKIC.md) |
+| 9 | **Telefonda çalışan Toprak** | HF Llama dışa aktarımı (logit eşitliği test edildi), GGUF ve MLX yolu, int8/int4, damıtma | [EDGE.md](EDGE.md) |
+| 10 | **Morfoloji Mikroskobu** | Probe, kontrol görevi, TopK SAE, aktivasyon yaması ve etkileşimli HTML raporları | [INTERPRETABILITY.md](INTERPRETABILITY.md) |
+
+Hızlı örnekler:
+
+```bash
+# MTP + MoE ile eğitim
+python3 training/train.py --model-size medium --mtp-heads 3 --num-experts 8 --experts-top-k 2
+
+# Spekülatif çözümleme (greedy ile hız ve çıktı karşılaştırması)
+python3 inference/speculative.py --checkpoint checkpoints/toprak_best.pt --compare
+
+# Talimat eğitimi (LoRA) → tercih hizalaması
+python3 training/sft.py --base-checkpoint checkpoints/toprak_best.pt \
+  --data alignment/examples/sft_sample.jsonl --output checkpoints/sft.pt --lora-r 16
+python3 training/dpo.py --base-checkpoint checkpoints/sft.pt \
+  --data alignment/examples/dpo_sample.jsonl --output checkpoints/dpo.pt
+
+# Kaynak gösteren mevzuat asistanı
+python3 -m rag.cli index --docs rag/examples --out rag_index.json
+python3 -m rag.cli ask --index rag_index.json --checkpoint checkpoints/dpo.pt \
+  --query "Bir üye aynı anda en fazla kaç materyal ödünç alabilir?"
+
+# Hugging Face / llama.cpp / MLX için dışa aktarım
+python3 -m export.hf_llama --checkpoint checkpoints/dpo.pt --out export/toprak-hf
+```
+
+Bu yükseltmelerle birlikte düzeltilen hatalar (morfolojik başlığın kök
+tokenlarını öğrenmemesi, KV cache'li çok-token attention maskesi, `.half()`
+ile bozulan RoPE tablosu, uzun sohbette çökme, eksik checkpoint config'i)
+[ARCHITECTURE_UPGRADES.md](ARCHITECTURE_UPGRADES.md#düzeltilen-hatalar)
+içinde listelenmiştir.
+
+---
+
 ## Proje Yapısı
 
 ```
@@ -131,6 +190,9 @@ toprak/
 │   ├── norms.py                  #    RMSNorm — Modern normalizasyon
 │   ├── rope.py                   #    RoPE — Rotary Position Embedding
 │   ├── tokenizer.py              #    SentencePiece BPE Tokenizer wrapper
+│   ├── moe.py                    #    Morfoloji yönlendirmeli uzman karışımı (MoE)
+│   ├── chat_template.py          #    Sohbet şablonu + kayıp maskesi
+│   ├── archiphoneme.py           #    Arşifonemik ek kodeki (+lAr, +DA, ...)
 │   ├── vowel_harmony.py          #    Ünlü Uyumu Auxiliary Loss (Türkçe'ye özel)
 │   ├── consonant_harmony.py      #    Ünsüz Benzeşmesi Auxiliary Loss (Türkçe'ye özel)
 │   ├── morph_weighting.py        #    Morfolojik Ağırlıklı CE Loss (dünyada ilk)
@@ -141,16 +203,31 @@ toprak/
 │   ├── crawler.py                #    asyncio + aiohttp web crawler
 │   ├── cleaner.py                #    Kalite, PII, dedup ve contamination pipeline
 │   ├── governance.py             #    Provenance, lisans ve audit metadata şeması
+│   ├── mixture.py                #    Müfredatlı veri karışımı örnekleyicisi
+│   ├── turkic.py                 #    Türk dilleri: kayıt, betik, transliterasyon
+│   ├── synthetic_math.py         #    Lisanssız sentetik Türkçe matematik verisi
 │   └── dataset.py                #    PyTorch Dataset + DataLoader
 │
 ├── training/                     # Eğitim
 │   ├── train.py                  #    CLI — Ana eğitim entry point
 │   ├── trainer.py                #    Eğitim döngüsü, checkpoint, logging
-│   └── scheduler.py              #    Cosine warmup LR scheduler
+│   ├── scheduler.py              #    Cosine warmup LR scheduler
+│   ├── sft.py                    #    Talimat eğitimi (SFT) + LoRA
+│   ├── dpo.py                    #    DPO / ORPO tercih hizalaması
+│   ├── grpo.py                   #    GRPO pekiştirmeli öğrenme
+│   ├── rewards.py                #    Doğrulanabilir ödül fonksiyonları
+│   └── distill.py                #    Öğretmen→öğrenci damıtma
 │
 ├── inference/                    # Çıkarım & Sohbet
 │   ├── generate.py               #    Metin üretimi (top-k, top-p, repetition penalty)
-│   └── chat.py                   #    Terminal tabanlı interaktif sohbet
+│   ├── chat.py                   #    Şablonlu interaktif sohbet
+│   ├── speculative.py            #    Kendi kendine spekülatif çözümleme
+│   └── grammar_guard.py          #    Ünlü uyumu korumalı üretim
+│
+├── alignment/                    # Toprak Anayasası + öz-düzeltme (Constitutional AI)
+├── rag/                          # Kaynak gösteren Türkçe RAG (BM25, alıntı doğrulama)
+├── export/                       # HF Llama dışa aktarımı + int8/int4 kuantizasyon
+├── interpret/                    # Morfoloji Mikroskobu: probe, SAE, HTML rapor
 │
 ├── evaluation/                   # Değerlendirme
 │   ├── eval.py                   #    Perplexity hesaplama
@@ -161,6 +238,8 @@ toprak/
 │   ├── tokenizer_analysis.py     #    Fertility, kapsam ve morfoloji metrikleri
 │   ├── analyze_tokenizer.py      #    Çoklu tokenizer karşılaştırma CLI
 │   ├── tokenizer_seed.json       #    Sürümlü Türkçe tokenizer seed seti
+│   ├── harmony_check.py          #    Üretimde ünlü uyumu ihlal oranı
+│   ├── turkic_tokenizer_report.py#    Türk dilleri tokenizer verimi
 │   └── benchmarks/               #    Sürümlü Türkçe seed benchmarklar
 │
 ├── upload/                       # HuggingFace Entegrasyonu
@@ -168,17 +247,26 @@ toprak/
 │
 ├── scripts/                      # Yardımcı Araçlar
 │   ├── prepare_data.py           #    Uçtan uca veri pipeline
-│   └── run_ablation.py           #    Kontrollü auxiliary-loss deney matrisi
+│   ├── run_ablation.py           #    Kontrollü auxiliary-loss deney matrisi
+│   ├── passkey_eval.py           #    Uzun bağlam passkey değerlendirmesi
+│   ├── archiphoneme_corpus.py    #    Korpusu arşifonemik biçime çevirme
+│   └── train_turkic_tokenizer.py #    Dengeli Türk dilleri tokenizer eğitimi
 │
-├── tests/                        # 🧪 Testler (Birim ve Entegrasyon Testleri)
-│   ├── test_consonant_harmony.py #    Ünsüz benzeşmesi birim testleri
-│   └── test_morph_head.py        #    Morfolojik başlık birim testleri
+├── tests/                        # 🧪 Birim ve entegrasyon testleri (python -m pytest -q tests)
 │
 ├── DATA_GOVERNANCE.md            #    Veri lisansı, kalite ve izlenebilirlik rehberi
 ├── EVALUATION.md                 #    Eval görevleri, metrikler ve rapor şeması
 ├── ABLATION.md                   #    Yardımcı loss katkı ölçüm protokolü
 ├── TOKENIZER_ANALYSIS.md         #    Tokenizer ölçüm ve karşılaştırma rehberi
 ├── REPRODUCIBILITY.md            #    Seed, manifest ve exact-resume protokolü
+├── ARCHITECTURE_UPGRADES.md      #    MTP, MoE, YaRN, spekülatif çözümleme, hata düzeltmeleri
+├── MORPHOPHONOLOGY.md            #    Arşifonemik ekler ve dilbilgisi koruması
+├── ALIGNMENT.md                  #    SFT, DPO/ORPO, Toprak Anayasası, sohbet
+├── REASONING.md                  #    GRPO ile akıl yürütme
+├── LONG_CONTEXT_RAG.md           #    32K bağlam ve kaynak gösteren RAG
+├── TURKIC.md                     #    Türk dilleri desteği
+├── EDGE.md                       #    Cihazda çalıştırma (GGUF/MLX, kuantizasyon)
+├── INTERPRETABILITY.md           #    Morfoloji Mikroskobu
 ├── requirements.txt              #    Python bağımlılıkları
 └── LICENSE                       #    Apache License 2.0
 ```
@@ -286,6 +374,11 @@ python3 inference/chat.py \
 🌱 Toprak: ...
 ```
 
+Sohbet artık ortak sohbet şablonunu kullanır ve geçmişi modelin bağlamına
+sığdırır. `--system "..."` ile sistem mesajı, `--grammar-guard mask` ile
+ünlü uyumu koruması eklenebilir. En iyi sonuç için önce SFT ile talimat
+eğitimi yapın (bkz. [ALIGNMENT.md](ALIGNMENT.md)).
+
 ### 4️⃣ Metin Üretimi
 
 ```bash
@@ -369,6 +462,7 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 | **v1.0** | 125M model, 10GB+ veri, stabil versiyon | ⏳ Planlandı |
 | **v1.5** | 342M model (Large), RTX 4090 ile eğitim | ⏳ Planlandı |
 | **v2.0** | Sürekli güncelleme, topluluk katkıları, fine-tuning | ⏳ Planlandı |
+| **v2.x altyapısı** | MTP, MoE, YaRN, SFT/DPO/GRPO, RAG, Türk dilleri, cihazda çalıştırma, yorumlanabilirlik | ✅ Kod ve testler hazır; eğitilmiş checkpoint'lerle ölçüm bekliyor |
 
 ---
 

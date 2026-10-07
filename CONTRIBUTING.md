@@ -107,21 +107,39 @@ toprak/
 │   ├── rope.py             #    Rotary Position Embedding
 │   ├── tokenizer.py        #    SentencePiece BPE tokenizer wrapper
 │   ├── vowel_harmony.py    #    Ünlü Uyumu Auxiliary Loss (🇹🇷 özgün)
-│   └── morph_weighting.py  #    Morfolojik Ağırlıklı CE Loss (🇹🇷 özgün)
+│   ├── consonant_harmony.py#    Ünsüz Benzeşmesi Auxiliary Loss (🇹🇷 özgün)
+│   ├── morph_weighting.py  #    Morfolojik Ağırlıklı CE Loss (🇹🇷 özgün)
+│   ├── syllable_rhyme.py   #    Hece ve Kafiye Auxiliary Loss (🇹🇷 özgün)
+│   ├── moe.py              #    Morfoloji yönlendirmeli MoE
+│   ├── chat_template.py    #    Sohbet şablonu (SFT/DPO/GRPO/sohbet ortak)
+│   └── archiphoneme.py     #    Arşifonemik ek kodeki
 ├── data/                   # 📊 Veri toplama ve işleme
 │   ├── sources.py          #    Veri kaynakları ve URL tanımları
 │   ├── crawler.py          #    asyncio+aiohttp web crawler
 │   ├── cleaner.py          #    7 adımlı veri temizleme pipeline
-│   └── dataset.py          #    ToprakDataset (PyTorch Dataset + DataLoader)
+│   ├── dataset.py          #    ToprakDataset (PyTorch Dataset + DataLoader)
+│   ├── governance.py       #    Provenance ve lisans metadata şeması
+│   ├── mixture.py          #    Müfredatlı veri karışımı
+│   ├── turkic.py           #    Türk dilleri desteği
+│   └── synthetic_math.py   #    Sentetik Türkçe matematik verisi
 ├── training/               # 🏋️ Eğitim
 │   ├── train.py            #    CLI giriş noktası (argparse)
 │   ├── trainer.py          #    ToprakTrainer — eğitim döngüsü, checkpoint, logging
-│   └── scheduler.py        #    Cosine warmup LR scheduler
+│   ├── scheduler.py        #    Cosine warmup LR scheduler
+│   ├── sft.py / dpo.py     #    Talimat eğitimi (LoRA) ve tercih hizalaması
+│   ├── grpo.py / rewards.py#    Doğrulanabilir ödüllü pekiştirmeli öğrenme
+│   └── distill.py          #    Öğretmen→öğrenci damıtma
 ├── inference/              # 💬 Çıkarım
 │   ├── generate.py         #    Metin üretimi (top-k, top-p, repetition penalty)
-│   └── chat.py             #    Terminal tabanlı interaktif sohbet
-├── evaluation/             # 📈 Değerlendirme
-│   └── eval.py             #    Perplexity hesaplama ve model değerlendirme
+│   ├── chat.py             #    Şablonlu interaktif sohbet
+│   ├── speculative.py      #    Kendi kendine spekülatif çözümleme
+│   └── grammar_guard.py    #    Ünlü uyumu korumalı üretim
+├── evaluation/             # 📈 Değerlendirme (perplexity, eval suite, ablation, tokenizer)
+├── alignment/              # 📜 Toprak Anayasası + öz-düzeltme
+├── rag/                    # 🔎 Kaynak gösteren Türkçe RAG
+├── export/                 # 📱 HF Llama dışa aktarımı + kuantizasyon
+├── interpret/              # 🔬 Morfoloji Mikroskobu (probe, SAE, rapor)
+├── tests/                  # 🧪 Birim ve entegrasyon testleri
 ├── upload/                 # ☁️ HuggingFace Hub entegrasyonu
 │   └── push_to_hub.py      #    Model ve tokenizer yükleme
 ├── scripts/                # 🔧 Yardımcı scriptler
@@ -396,8 +414,11 @@ Yardıma en çok ihtiyaç duyulan alanlar:
 
 ### 🧪 Test ve Kalite
 
-- `pytest` ile birim testleri yazma (şu an test altyapısı yok — harika bir katkı fırsatı!)
-- Her modül için temel testler: `model/`, `data/`, `training/`
+- Test paketi `python -m pytest -q tests` ile çalışır (CPU'da, deterministik).
+  Yeni her özellik `tests/test_*.py` altında unittest sınıflarıyla gelmelidir;
+  model testlerinde `ToprakLM(config, tokenizer=MockTokenizer())` ve küçük
+  konfigürasyonlar kullanın
+- Eksik kapsam: `data/crawler.py`, `data/cleaner.py`, `upload/`
 - CI/CD pipeline kurulumu (GitHub Actions)
 - Linter/formatter yapılandırması (ruff, black, isort)
 
@@ -411,7 +432,9 @@ Yardıma en çok ihtiyaç duyulan alanlar:
 
 - Yeni attention mekanizmaları denemeleri
 - Bellek optimizasyonları
-- Quantization desteği (INT8, INT4)
+- Hızlı int4 çekirdekleri (şu an `export/quantize.py` boyut ve kalite ölçümü içindir)
+- MoE modelleri için Mixtral formatında dışa aktarım
+- Örneklemeli spekülatif çözümleme (rejection sampling)
 - Flash Attention entegrasyonu
 - Daha verimli KV cache stratejileri
 

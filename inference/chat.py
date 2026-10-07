@@ -190,6 +190,12 @@ def main():
     parser.add_argument("--no-repeat-ngram", type=int, default=4)
     parser.add_argument("--system", type=str, default=None,
                         help="Sistem mesajı (asistanın rolü ve kuralları)")
+    parser.add_argument("--grammar-guard", type=str, default="off",
+                        choices=["off", "mask", "penalty"],
+                        help="Ünlü uyumu / ünsüz benzeşmesi korumalı üretim "
+                             "(inference/grammar_guard.py)")
+    parser.add_argument("--guard-penalty", type=float, default=5.0,
+                        help="--grammar-guard penalty modunda logit cezası")
 
     args = parser.parse_args()
 
@@ -205,6 +211,14 @@ def main():
     tokenizer = ToprakTokenizer(args.tokenizer)
     print(f"✓ Model hazır: {model.count_parameters()/1e6:.1f}M parametre")
 
+    logits_processors = None
+    if args.grammar_guard != "off":
+        from inference.grammar_guard import build_grammar_guard
+        logits_processors = [build_grammar_guard(
+            tokenizer, mode=args.grammar_guard, penalty=args.guard_penalty
+        )]
+        print(f"✓ Dilbilgisi koruması: {args.grammar_guard}")
+
     # Sohbet başlat
     chat(
         model=model,
@@ -217,6 +231,7 @@ def main():
         repetition_penalty=args.repetition_penalty,
         no_repeat_ngram_size=args.no_repeat_ngram,
         system_prompt=args.system,
+        logits_processors=logits_processors,
     )
 
 

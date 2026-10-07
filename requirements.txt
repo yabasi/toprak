@@ -10,6 +10,7 @@ sentencepiece>=0.1.99
 transformers>=4.30.0
 datasets>=2.14.0
 huggingface_hub>=0.16.0
+safetensors>=0.4.0            # export/hf_llama.py (HF/llama.cpp/MLX dışa aktarımı)
 
 # Web Crawler
 aiohttp>=3.8.0
@@ -28,6 +29,9 @@ pyarrow>=14.0.0               # HuggingFace datasets streaming için
 # Apple Silicon
 mlx>=0.1.0
 mlx-lm>=0.1.0
+
+# Test
+pytest>=7.0
 
 # Utilities
 requests>=2.31.0
