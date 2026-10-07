@@ -197,6 +197,13 @@ def main():
                         help="Cihaz (varsayılan: otomatik)")
     parser.add_argument("--num-samples", type=int, default=1,
                         help="Kaç farklı çıktı üretilecek")
+    parser.add_argument("--grammar-guard", type=str, default="off",
+                        choices=["off", "mask", "penalty"],
+                        help=("Ünlü uyumu / ünsüz benzeşmesi korumalı kod çözme "
+                              "(inference/grammar_guard.py): off, mask (-inf) "
+                              "veya penalty (logit cezası)"))
+    parser.add_argument("--guard-penalty", type=float, default=5.0,
+                        help="--grammar-guard penalty modunda çıkarılacak logit cezası")
 
     args = parser.parse_args()
 
@@ -217,6 +224,14 @@ def main():
     print(f"  Prompt: \"{args.prompt}\"")
     print(f"  Temperature: {args.temperature}")
     print(f"  Top-k: {args.top_k}, Top-p: {args.top_p}")
+
+    guard = None
+    if args.grammar_guard != "off":
+        from inference.grammar_guard import build_grammar_guard
+        guard = build_grammar_guard(
+            tokenizer, mode=args.grammar_guard, penalty=args.guard_penalty
+        )
+        print(f"  Grammar guard: {args.grammar_guard}")
     print("=" * 50)
 
     for i in range(args.num_samples):
@@ -232,8 +247,15 @@ def main():
             top_k=args.top_k,
             top_p=args.top_p,
             device=device,
+            logits_processors=[guard] if guard is not None else None,
         )
         print(f"\n{text}")
+
+    if guard is not None:
+        st = guard.stats
+        print(f"\n  Grammar guard: {st.applied}/{st.steps} adımda uygulandı, "
+              f"{st.top1_changed} adımda en olası token değişti, "
+              f"{st.fallbacks} geri çekilme")
 
     print("\n" + "=" * 50)
 
