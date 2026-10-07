@@ -1,0 +1,57 @@
+{
+  "version": "toprak-mixture-v1",
+  "description": "Türk dünyası curriculum karışımı: Türkiye Türkçesi baskın başlar (0.75 → 0.60), akraba diller ve paralel veri eğitim boyunca artar. Kaynak adları JSONL 'source' alanıyla birebir eşleşmelidir; bkz. TURKIC.md.",
+  "curriculum_steps": 20000,
+  "groups": {
+    "turkish": {
+      "description": "Türkiye Türkçesi (tr). Varsayılan grup: eşleşmeyen kaynaklar buraya düşer.",
+      "sources": ["wiki", "fineweb2", "culturax", "wiki_tr", "fineweb2_tr", "culturax_tr"],
+      "default": true,
+      "initial_weight": 0.75,
+      "final_weight": 0.60
+    },
+    "oghuz": {
+      "description": "Oğuz akrabalar: Azerbaycan, Türkmen, Gagavuz, Kırım Tatar Türkçesi.",
+      "sources": [
+        "wiki_az", "fineweb2_az", "culturax_az",
+        "wiki_tk", "fineweb2_tk", "culturax_tk",
+        "wiki_gag", "fineweb2_gag",
+        "wiki_crh", "fineweb2_crh"
+      ],
+      "initial_weight": 0.08,
+      "final_weight": 0.12
+    },
+    "kipchak": {
+      "description": "Kıpçak dilleri: Kazak, Kırgız, Tatar, Başkurt Türkçesi.",
+      "sources": [
+        "wiki_kk", "fineweb2_kk", "culturax_kk",
+        "wiki_ky", "fineweb2_ky", "culturax_ky",
+        "wiki_tt", "fineweb2_tt", "culturax_tt",
+        "wiki_ba", "fineweb2_ba", "culturax_ba"
+      ],
+      "initial_weight": 0.07,
+      "final_weight": 0.11
+    },
+    "karluk": {
+      "description": "Karluk dilleri: Özbek ve Uygur Türkçesi.",
+      "sources": [
+        "wiki_uz", "fineweb2_uz", "culturax_uz",
+        "wiki_ug", "fineweb2_ug", "culturax_ug"
+      ],
+      "initial_weight": 0.05,
+      "final_weight": 0.08
+    },
+    "historical": {
+      "description": "Tarihî metinler: Osmanlı Türkçesi (Arap yazılı, tek dilli).",
+      "sources": ["ota_corpus", "ota_wikisource"],
+      "initial_weight": 0.01,
+      "final_weight": 0.03
+    },
+    "parallel": {
+      "description": "Paralel/çeviri örnekleri (<dil:xx> … <çeviri> <dil:yy> …), ör. Osmanlıca ↔ Türkçe, Kazakça ↔ Türkçe.",
+      "sources": ["parallel_ota_tr", "parallel_turkic_tr", "parallel_translit"],
+      "initial_weight": 0.04,
+      "final_weight": 0.06
+    }
+  }
+}

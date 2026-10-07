@@ -1,0 +1,277 @@
+{
+ "version": "toprak-turkic-seed-v1",
+ "license": "Apache-2.0",
+ "description": "Toprak ekibi tarafından yazılmış, gündelik kısa cümleler (selamlaşma, hava, şehir, çay). 'latin' alanı: kk/ky/tt/ug için data/turkic.py transliterasyonu, ota için insan yazımı Latin transkripsiyon. Yazımlar özenle seçildi ancak anadil konuşuru tarafından gözden geçirilmelidir.",
+ "samples": [
+  {
+   "lang": "tr",
+   "text": "Merhaba! Nasılsınız?"
+  },
+  {
+   "lang": "tr",
+   "text": "Bugün hava çok güzel."
+  },
+  {
+   "lang": "tr",
+   "text": "Ben İstanbul'da yaşıyorum."
+  },
+  {
+   "lang": "tr",
+   "text": "Akşam birlikte çay içelim."
+  },
+  {
+   "lang": "tr",
+   "text": "Türkiye güzel bir ülkedir."
+  },
+  {
+   "lang": "az",
+   "text": "Salam! Necəsən?"
+  },
+  {
+   "lang": "az",
+   "text": "Bu gün hava çox gözəldir."
+  },
+  {
+   "lang": "az",
+   "text": "Mən Bakıda yaşayıram."
+  },
+  {
+   "lang": "az",
+   "text": "Biz axşam çay içirik."
+  },
+  {
+   "lang": "az",
+   "text": "Azərbaycan gözəl bir ölkədir."
+  },
+  {
+   "lang": "tk",
+   "text": "Salam! Ýagdaýlaryň nähili?"
+  },
+  {
+   "lang": "tk",
+   "text": "Şu gün howa örän gowy."
+  },
+  {
+   "lang": "tk",
+   "text": "Men Aşgabatda ýaşaýaryn."
+  },
+  {
+   "lang": "tk",
+   "text": "Biz agşam çaý içýäris."
+  },
+  {
+   "lang": "tk",
+   "text": "Türkmenistan owadan ýurt."
+  },
+  {
+   "lang": "uz",
+   "text": "Assalomu alaykum! Ahvolingiz qalay?"
+  },
+  {
+   "lang": "uz",
+   "text": "Bugun havo juda yaxshi."
+  },
+  {
+   "lang": "uz",
+   "text": "Men Toshkentda yashayman."
+  },
+  {
+   "lang": "uz",
+   "text": "Biz kechqurun choy ichamiz."
+  },
+  {
+   "lang": "uz",
+   "text": "Oʻzbekiston goʻzal va qadimiy yurt."
+  },
+  {
+   "lang": "kk",
+   "text": "Сәлеметсіз бе? Қалыңыз қалай?",
+   "latin": "Sälemetsız be? Qalyñyz qalai?"
+  },
+  {
+   "lang": "kk",
+   "text": "Бүгін ауа райы өте жақсы.",
+   "latin": "Bügın aua raiy öte jaqsy."
+  },
+  {
+   "lang": "kk",
+   "text": "Мен Алматыда тұрамын.",
+   "latin": "Men Almatyda tūramyn."
+  },
+  {
+   "lang": "kk",
+   "text": "Біз кешке шай ішеміз.",
+   "latin": "Bız keşke şai ışemız."
+  },
+  {
+   "lang": "kk",
+   "text": "Қазақстан — үлкен әрі әдемі ел.",
+   "latin": "Qazaqstan — ülken ärı ädemı el."
+  },
+  {
+   "lang": "ky",
+   "text": "Саламатсызбы? Кандайсыз?",
+   "latin": "Salamatsızbı? Kandaysız?"
+  },
+  {
+   "lang": "ky",
+   "text": "Бүгүн аба ырайы абдан жакшы.",
+   "latin": "Bügün aba ırayı abdan jakşı."
+  },
+  {
+   "lang": "ky",
+   "text": "Мен Бишкекте турам.",
+   "latin": "Men Bişkekte turam."
+  },
+  {
+   "lang": "ky",
+   "text": "Биз кечинде чай ичебиз.",
+   "latin": "Biz keçinde çay içebiz."
+  },
+  {
+   "lang": "ky",
+   "text": "Кыргызстан — тоолуу, кооз өлкө.",
+   "latin": "Kırgızstan — tooluu, kooz ölkö."
+  },
+  {
+   "lang": "tt",
+   "text": "Исәнмесез! Хәлләр ничек?",
+   "latin": "İsänmesez! Xällär niçek?"
+  },
+  {
+   "lang": "tt",
+   "text": "Бүген һава бик әйбәт.",
+   "latin": "Bügen hawa bik äybät."
+  },
+  {
+   "lang": "tt",
+   "text": "Мин Казанда яшим.",
+   "latin": "Min Qazanda yäşim."
+  },
+  {
+   "lang": "tt",
+   "text": "Без кичен чәй эчәбез.",
+   "latin": "Bez kiçen çäy eçäbez."
+  },
+  {
+   "lang": "tt",
+   "text": "Татарстан — матур җир.",
+   "latin": "Tatarstan — matur cir."
+  },
+  {
+   "lang": "ba",
+   "text": "Һаумыһығыҙ! Хәлдәр нисек?"
+  },
+  {
+   "lang": "ba",
+   "text": "Бөгөн һауа бик яҡшы."
+  },
+  {
+   "lang": "ba",
+   "text": "Мин Өфөлә йәшәйем."
+  },
+  {
+   "lang": "ba",
+   "text": "Беҙ киске сәй эсәбеҙ."
+  },
+  {
+   "lang": "ba",
+   "text": "Башҡортостан — матур ер."
+  },
+  {
+   "lang": "ug",
+   "text": "ياخشىمۇسىز؟",
+   "latin": "Yaxshimusiz?"
+  },
+  {
+   "lang": "ug",
+   "text": "بۈگۈن ھاۋا ناھايىتى ياخشى.",
+   "latin": "Bügün hawa nahayiti yaxshi."
+  },
+  {
+   "lang": "ug",
+   "text": "مەن ئۈرۈمچىدە تۇرىمەن.",
+   "latin": "Men ürümchide turimen."
+  },
+  {
+   "lang": "ug",
+   "text": "بۇ كىتاب بەك قىزىقارلىق.",
+   "latin": "Bu kitab bek qiziqarliq."
+  },
+  {
+   "lang": "ug",
+   "text": "رەھمەت، خەير خوش.",
+   "latin": "Rehmet, xeyr xosh."
+  },
+  {
+   "lang": "crh",
+   "text": "Selâm! Nasılsıñ?"
+  },
+  {
+   "lang": "crh",
+   "text": "Bugün ava çoq yahşı."
+  },
+  {
+   "lang": "crh",
+   "text": "Men Aqmescitte yaşayım."
+  },
+  {
+   "lang": "crh",
+   "text": "Biz aqşam çay içemiz."
+  },
+  {
+   "lang": "crh",
+   "text": "Qırım — güzel bir yurt."
+  },
+  {
+   "lang": "gag",
+   "text": "Ii günnär! Nasılsınız?"
+  },
+  {
+   "lang": "gag",
+   "text": "Bugün hava pek gözäl."
+  },
+  {
+   "lang": "gag",
+   "text": "Bän Komratta yaşêêrim."
+  },
+  {
+   "lang": "gag",
+   "text": "Biz akşam çay içeriz."
+  },
+  {
+   "lang": "gag",
+   "text": "Gagauziya — gözäl bir er."
+  },
+  {
+   "lang": "ota",
+   "text": "سلام علیکم! ناصلسکز؟",
+   "latin": "Selâmün aleyküm! Nasılsınız?",
+   "latin_kind": "transcription"
+  },
+  {
+   "lang": "ota",
+   "text": "هوا بوگون پك گوزل.",
+   "latin": "Hava bugün pek güzel.",
+   "latin_kind": "transcription"
+  },
+  {
+   "lang": "ota",
+   "text": "بن استانبولده اوطورییورم.",
+   "latin": "Ben İstanbul'da oturuyorum.",
+   "latin_kind": "transcription"
+  },
+  {
+   "lang": "ota",
+   "text": "آقشام برابر چای ایچه‌لم.",
+   "latin": "Akşam beraber çay içelim.",
+   "latin_kind": "transcription"
+  },
+  {
+   "lang": "ota",
+   "text": "بو کتابی اوقومق ایستییورم.",
+   "latin": "Bu kitabı okumak istiyorum.",
+   "latin_kind": "transcription"
+  }
+ ]
+}
