@@ -36,6 +36,8 @@ data_cache/
 *.jsonl
 !evaluation/benchmarks/
 !evaluation/benchmarks/*.jsonl
+!alignment/examples/
+!alignment/examples/*.jsonl
 *.bin
 *.npy
 *.npz
