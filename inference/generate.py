@@ -12,6 +12,8 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from typing import Callable, List, Optional, Sequence
+
 import torch
 import torch.nn.functional as F
 
@@ -32,11 +34,38 @@ def generate_text(
     repetition_penalty: float = 1.3,
     no_repeat_ngram_size: int = 4,
     device: str = "mps",
+    logits_processors: Optional[List[Callable]] = None,
+    stop_ids: Optional[Sequence[int]] = None,
+    prompt_ids: Optional[List[int]] = None,
+    return_new_only: bool = False,
 ) -> str:
+    """
+    KV cache'li örnekleme ile metin üret.
+
+    Args:
+        logits_processors: Her adımda (generated_ids: List[int], logits: (1, V))
+            → logits çağrılan işlemciler; repetition penalty'den sonra,
+            temperature'dan önce uygulanır (ör. inference.grammar_guard).
+        stop_ids: Üretimi durduran token ID'leri (varsayılan: yalnız EOS).
+        prompt_ids: Hazır prompt token ID'leri (ör. sohbet şablonu);
+            verilirse `prompt` metni kodlanmaz.
+        return_new_only: True ise yalnız yeni üretilen kısmın metni döner.
+    """
     model.eval()
     model.to(device)
 
-    input_ids = tokenizer.encode(prompt, add_bos=True, add_eos=False)
+    if prompt_ids is not None:
+        input_ids = list(prompt_ids)
+    else:
+        input_ids = tokenizer.encode(prompt, add_bos=True, add_eos=False)
+    stop_set = set(stop_ids) if stop_ids is not None else {tokenizer.eos_token_id}
+    max_positions = model.freqs_cis.size(0)
+    if len(input_ids) >= max_positions:
+        raise ValueError(
+            f"Prompt ({len(input_ids)} token) modelin pozisyon sınırını "
+            f"({max_positions}) aşıyor; geçmişi kırpın."
+        )
+    max_new_tokens = min(max_new_tokens, max_positions - len(input_ids))
     generated = list(input_ids)
     input_tensor = torch.tensor([input_ids], dtype=torch.long).to(device)
 
@@ -72,6 +101,10 @@ def generate_text(
                         banned_token = generated[i + no_repeat_ngram_size - 1]
                         logits[0, banned_token] = float('-inf')
 
+            # Harici logit işlemcileri (dilbilgisi koruması vb.)
+            for processor in logits_processors or ():
+                logits = processor(generated, logits)
+
             # Temperature
             logits = logits / max(temperature, 1e-8)
 
@@ -99,13 +132,15 @@ def generate_text(
 
             next_token = torch.multinomial(probs, num_samples=1)
 
-            # EOS kontrolü
-            if next_token.item() == tokenizer.eos_token_id:
+            # Durdurma kontrolü (EOS / tur sonu)
+            if next_token.item() in stop_set:
                 break
 
             generated.append(next_token.item())
             input_tensor = torch.cat([input_tensor, next_token], dim=1)
 
+    if return_new_only:
+        return tokenizer.decode(generated[len(input_ids):])
     return tokenizer.decode(generated)
 
 
