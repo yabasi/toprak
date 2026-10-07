@@ -93,5 +93,51 @@ class TestTrainerWithUpgrades(unittest.TestCase):
                 self.assertTrue(torch.equal(tensor, full_state[name]), name)
 
 
+
+class TestInitFrom(unittest.TestCase):
+
+    def _dense_checkpoint(self, temp_dir, **overrides):
+        base = dict(vocab_size=16, d_model=16, num_heads=2, num_kv_heads=1, num_layers=2,
+                    d_ff=32, max_seq_len=8, device="cpu")
+        base.update(overrides)
+        torch.manual_seed(0)
+        model = ToprakLM(ModelConfig(**base), tokenizer=TinyTokenizer())
+        path = os.path.join(temp_dir, "dense.pt")
+        torch.save({"model_state_dict": model.state_dict(),
+                    "config": model.config.architecture_dict()}, path)
+        return model, base, path
+
+    def test_weights_only_load_keeps_new_modules_fresh(self):
+        from training.train import load_initial_weights
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dense, base, path = self._dense_checkpoint(temp_dir)
+            torch.manual_seed(1)
+            extended = ToprakLM(ModelConfig(**{**base, "max_seq_len": 32, "num_mtp_heads": 2,
+                                               "rope_scaling": {"type": "yarn", "factor": 4.0,
+                                                                "original_max_seq_len": 8}}),
+                                tokenizer=TinyTokenizer())
+            report = load_initial_weights(extended, path)
+            self.assertTrue(all(name.startswith("mtp_heads.") for name in report["missing"]))
+            self.assertTrue(report["missing"])
+            self.assertTrue(torch.equal(extended.blocks[1].attn.q_proj.weight,
+                                        dense.blocks[1].attn.q_proj.weight))
+
+    def test_sparse_upcycling_copies_dense_ffn_into_every_expert(self):
+        from training.train import load_initial_weights
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dense, base, path = self._dense_checkpoint(temp_dir)
+            moe = ToprakLM(ModelConfig(**{**base, "num_experts": 4, "experts_top_k": 2,
+                                          "moe_d_ff": 32}), tokenizer=TinyTokenizer())
+            report = load_initial_weights(moe, path)
+            self.assertEqual(len(report["upcycled"]), 2 * 4 * 3)
+            for expert in moe.blocks[0].ffn.experts:
+                self.assertTrue(torch.equal(expert.down_proj.weight,
+                                            dense.blocks[0].ffn.down_proj.weight))
+            # Tüm uzmanlar aynı ve ağırlıklar normalize → çıktı yoğun modelle aynı
+            ids = torch.randint(4, 16, (1, 8))
+            dense.eval(); moe.eval()
+            self.assertTrue(torch.allclose(dense(ids)[0], moe(ids)[0], atol=1e-5))
+
+
 if __name__ == "__main__":
     unittest.main()

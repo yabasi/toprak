@@ -74,21 +74,21 @@ Doğrudan 2K'dan 32K'ya atlamak yerine iki aşama daha kararlı sonuç verir:
 # Aşama 1: 2K → 8K (factor 4)
 python training/train.py --model-size large \
     --data-dir data_bin_long --bin-mode \
-    --resume checkpoints/toprak_best.pt \
+    --init-from checkpoints/toprak_best.pt \
     --max-seq-len 8192 --rope-scaling yarn --rope-factor 4 \
     --rope-original-max-seq-len 2048 \
-    --batch-size 1 --grad-accum 32 --lr 2e-5 \
-    --max-steps <mevcut_adım + 1000> --bf16 \
+    --batch-size 1 --grad-accum 32 --lr 2e-5 --warmup-steps 50 \
+    --max-steps 1000 --bf16 \
     --checkpoint-dir checkpoints/long8k
 
 # Aşama 2: 8K → 32K (factor 16, hâlâ orijinal 2K'ya göre)
 python training/train.py --model-size large \
     --data-dir data_bin_long --bin-mode \
-    --resume checkpoints/long8k/toprak_last.pt \
+    --init-from checkpoints/long8k/toprak_last.pt \
     --max-seq-len 32768 --rope-scaling yarn --rope-factor 16 \
     --rope-original-max-seq-len 2048 \
-    --batch-size 1 --grad-accum 16 --lr 1e-5 \
-    --max-steps <mevcut_adım + 600> --bf16 \
+    --batch-size 1 --grad-accum 16 --lr 1e-5 --warmup-steps 50 \
+    --max-steps 600 --bf16 \
     --checkpoint-dir checkpoints/long32k
 ```
 
@@ -100,12 +100,14 @@ Görev tanımındaki tek adımlı 16K varyantı da kullanılabilir:
 
 - `--rope-factor` her zaman **orijinal ön eğitim bağlamına** göre verilir.
   `--rope-original-max-seq-len 2048` değeri iki aşamada da aynı kalır.
-- `--resume` ağırlıkları, optimizer durumunu ve LR scheduler durumunu
-  geri yükler. Cosine programı ön eğitimin sonundaysa LR zaten düşük
-  olacaktır. Bu, uzun bağlam uyarlaması için genellikle uygundur. Aynı
-  sebeple `--max-steps` değerini mevcut adımın **üzerine** ekleyerek verin.
-  Taze bir warmup ile yeni LR programı istiyorsanız yalnızca ağırlık
-  yükleyen bir başlatma gerekir. Bu seçenek `train.py`'de henüz yoktur.
+- `--init-from` yalnızca model ağırlıklarını yükler. Optimizer, LR programı
+  ve adım sayacı sıfırdan başlar, bu yüzden `--max-steps` bu aşamanın kendi
+  adım sayısıdır ve kısa bir `--warmup-steps` ile taze bir LR programı
+  kurulur. Aynı bayrak MTP başlığı eklemek veya yoğun modeli MoE'ye
+  "upcycle" etmek için de kullanılır (bkz. ARCHITECTURE_UPGRADES.md).
+  Ön eğitimin optimizer ve scheduler durumunu da korumak istiyorsanız
+  `--resume` kullanın; o durumda `--max-steps` mevcut adımın **üzerine**
+  eklenerek verilir.
 - **Adım ve token önerisi:** YaRN makalesindeki deneylerde birkaç yüz adım
   (~0,1–0,5 milyar token) yeterli oldu. Toprak boyutundaki modeller için
   başlangıç noktası olarak aşama başına 400–1000 adım öneriyoruz. Adım başına
@@ -359,9 +361,7 @@ numarasıyla birlikte cevap verir. Cevaptaki her cümle kaynağa kadar izlenebil
   kadar iyi kullanamaz. Passkey testini geçmek, uzun belgeler üzerinde akıl
   yürütebildiği anlamına gelmez.
 - **32K eğitim maliyeti yüksektir:** attention hesabı `O(T²)`, logit belleği
-  büyüktür. MPS ile pratik değildir. `--resume` scheduler durumunu da geri
-  yükler. Yalnızca ağırlıkla başlatıp taze bir LR programı başlatma seçeneği
-  henüz yoktur.
+  büyüktür. MPS ile pratik değildir.
 - **Arama yalnızca sözcükseldir (BM25).** Eş anlamlıları ve yeniden ifadeyi
   ("kira" / "icar") yakalamaz. Kök bulucu sezgiseldir: bazı kelimeleri yanlış
   köklendirir ve kısa kelimelere dokunmaz (`ev`/`evler` eşleşmez). Yoğun

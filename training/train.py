@@ -90,6 +90,13 @@ def parse_args():
         help="Eğitime devam etmek için checkpoint dosyası"
     )
     parser.add_argument(
+        "--init-from", type=str, default=None,
+        help=(
+            "Yalnız ağırlıkları yükle; optimizer/scheduler/adım sıfırdan başlar "
+            "(uzun bağlam devam eğitimi, MTP ekleme, yoğun→MoE upcycling için)"
+        ),
+    )
+    parser.add_argument(
         "--checkpoint-dir", type=str, default="checkpoints",
         help="Checkpoint kayıt dizini"
     )
@@ -223,6 +230,10 @@ def parse_args():
         help="Token başına aktif uzman sayısı (varsayılan: 2)"
     )
     parser.add_argument(
+        "--moe-d-ff", type=int, default=None,
+        help="Uzman başına FFN boyutu (varsayılan d_ff/top_k; upcycling için d_ff)"
+    )
+    parser.add_argument(
         "--moe-layer-freq", type=int, default=None,
         help="Her kaçıncı blok MoE olsun (1 = tüm bloklar)"
     )
@@ -250,6 +261,47 @@ def parse_args():
     return parser.parse_args()
 
 
+def load_initial_weights(model, checkpoint_path: str) -> dict:
+    """
+    Checkpoint'ten yalnız model ağırlıklarını yükle (--init-from).
+
+    - Yeni eklenen modüller (MTP başlıkları, MoE yönlendiricisi) kendi
+      başlangıç değerleriyle kalır.
+    - Sparse upcycling: checkpoint yoğun FFN taşıyor, model MoE ise ve
+      uzman boyutu d_ff'ye eşitse (moe_d_ff = d_ff), yoğun FFN ağırlıkları
+      her uzmana kopyalanır. Böylece MoE eğitimi sıfırdan değil, eğitilmiş
+      yoğun modelden başlar.
+
+    Returns:
+        {"loaded": [...], "upcycled": [...], "missing": [...], "skipped": [...]}
+    """
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    source = checkpoint.get("model_state_dict", checkpoint)
+    source = {k.removeprefix("_orig_mod."): v for k, v in source.items()}
+    target = model.state_dict()
+
+    new_state, report = {}, {"loaded": [], "upcycled": [], "missing": [], "skipped": []}
+    for name, tensor in target.items():
+        if name in source and source[name].shape == tensor.shape:
+            new_state[name] = source[name]
+            report["loaded"].append(name)
+            continue
+        if ".ffn.experts." in name:
+            prefix, rest = name.split(".ffn.experts.", 1)
+            dense_name = f"{prefix}.ffn.{rest.split('.', 1)[1]}"
+            if dense_name in source and source[dense_name].shape == tensor.shape:
+                new_state[name] = source[dense_name]
+                report["upcycled"].append(name)
+                continue
+        if name in source:
+            report["skipped"].append(name)
+        else:
+            report["missing"].append(name)
+
+    model.load_state_dict(new_state, strict=False)
+    return report
+
+
 def apply_architecture_overrides(config, args) -> None:
     """MTP / MoE / uzun bağlam CLI argümanlarını konfigürasyona uygula."""
     if getattr(args, "mtp_heads", None) is not None:
@@ -260,6 +312,8 @@ def apply_architecture_overrides(config, args) -> None:
         config.num_experts = args.num_experts
     if getattr(args, "experts_top_k", None) is not None:
         config.experts_top_k = args.experts_top_k
+    if getattr(args, "moe_d_ff", None) is not None:
+        config.moe_d_ff = args.moe_d_ff
     if getattr(args, "moe_layer_freq", None) is not None:
         config.moe_layer_freq = args.moe_layer_freq
     if getattr(args, "no_moe_morph_routing", False):
@@ -304,6 +358,10 @@ def build_training_recipe(args, config) -> dict:
         "data_fingerprint_mode": args.data_fingerprint,
         "verify_data_hashes": args.verify_data_hashes,
         "mixture_sampling": not args.no_mixture_sampling,
+        "init_from": (
+            os.path.abspath(args.init_from) if getattr(args, "init_from", None) else None
+        ),
+        "architecture": config.architecture_dict(),
         "auxiliary_losses": {
             "vowel_harmony": {
                 "enabled": args.vowel_harmony,
@@ -511,6 +569,10 @@ def main():
     # ─────────────────────────────────────────────
     if args.resume:
         validate_checkpoint(args.resume)
+    if args.init_from:
+        if args.resume:
+            raise SystemExit("❌ --resume ve --init-from birlikte kullanılamaz.")
+        validate_checkpoint(args.init_from)
 
     # ─────────────────────────────────────────────
     # 5. Model
@@ -523,6 +585,14 @@ def main():
 
     param_count = model.count_parameters()
     print(f"\n🧠 Model oluşturuldu: {param_count/1e6:.1f}M parametre")
+
+    if args.init_from:
+        init_report = load_initial_weights(model, args.init_from)
+        print(f"  ✓ Ağırlıklar yüklendi: {args.init_from}")
+        print(f"    Yüklenen: {len(init_report['loaded'])}, "
+              f"upcycle: {len(init_report['upcycled'])}, "
+              f"yeni/başlangıç değeri: {len(init_report['missing'])}, "
+              f"şekil uyumsuz: {len(init_report['skipped'])}")
 
     # ─────────────────────────────────────────────
     # 6. Ünlü Uyumu Loss (opsiyonel)

@@ -39,6 +39,10 @@ MTPHead(h) = RMSNorm( h + W2 · SiLU(W1 · RMSNorm(h)) )
 
 ```bash
 python training/train.py --model-size medium --mtp-heads 3 --mtp-lambda 0.3 ...
+
+# Mevcut checkpoint'e MTP başlığı eklemek (başlıklar sıfırdan, gövde yüklenir)
+python training/train.py --model-size medium --init-from checkpoints/toprak_best.pt \
+  --mtp-heads 3 --lr 1e-4 --warmup-steps 200 --max-steps 5000 ...
 ```
 
 ## 2. Kendi Kendine Spekülatif Çözümleme
@@ -100,6 +104,16 @@ Gerçek parametre sayıları (bu depodaki presetlerle ölçüldü, MoE tüm blok
 python training/train.py --model-size medium --num-experts 8 --experts-top-k 2 ...
 ```
 
+**Sparse upcycling:** Eğitilmiş yoğun bir checkpoint'ten MoE başlatmak için
+uzman boyutunu `d_ff`'ye eşitleyip `--init-from` kullanın. Yoğun FFN
+ağırlıkları her uzmana kopyalanır; başlangıçta model yoğun modelle aynı
+çıktıyı verir (test edildi), sonra uzmanlar eğitimle ayrışır:
+
+```bash
+python training/train.py --model-size medium --init-from checkpoints/toprak_best.pt \
+  --num-experts 8 --experts-top-k 2 --moe-d-ff 2048 ...   # medium d_ff = 2048
+```
+
 Notlar: MoE blokları gradient checkpointing'i atlar. HF/Llama dışa aktarımı MoE
 modellerini desteklemez (bkz. EDGE.md). MoE'nin Türkçe için yoğun modele göre
 kazancı henüz ölçülmedi. `ABLATION.md` protokolüyle aynı aktif hesapta
@@ -116,9 +130,10 @@ karşılaştırılmalıdır.
   sıcaklığı `mscale = 0.1·ln(s) + 1` ile düzeltilir.
 
 ```bash
-# 2K ile ön eğitilmiş checkpoint'i 16K'ya genişletme (devam eğitimi)
-python training/train.py --model-size large --resume checkpoints/toprak_last.pt \
-  --max-seq-len 16384 --rope-scaling yarn --rope-original-max-seq-len 2048 ...
+# 2K ile ön eğitilmiş checkpoint'i 16K'ya genişletme (yalnız ağırlık, taze LR programı)
+python training/train.py --model-size large --init-from checkpoints/toprak_last.pt \
+  --max-seq-len 16384 --rope-scaling yarn --rope-original-max-seq-len 2048 \
+  --lr 2e-5 --warmup-steps 50 --max-steps 1000 ...
 ```
 
 Ayrıntılı tarif, passkey değerlendirmesi ve kaynak gösteren RAG için
