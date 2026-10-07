@@ -1,0 +1,35 @@
+---
+id: ornek-bisiklet
+title: Örnek Belediyesi Bisiklet Paylaşım Yönergesi
+url: https://example.org/mevzuat/ornek-bisiklet-yonergesi
+license: Apache-2.0 (Toprak projesi kurgusal örneği)
+date: 2026-03-02
+fictional: true
+---
+Örnek Belediyesi Bisiklet Paylaşım Yönergesi
+
+KURGUSAL ÖRNEK: Bu metin Toprak projesi için yazılmış hayali bir yönergedir; gerçek bir belediyeye ait değildir.
+
+Amaç ve kapsam
+MADDE 1 – (1) Bu Yönerge, Örnek Belediyesi tarafından işletilen paylaşımlı bisiklet sisteminin kullanım koşullarını belirler.
+
+Kullanıcı kaydı
+MADDE 2 – (1) Sistemi on sekiz yaşını doldurmuş ve mobil uygulama üzerinden kayıt olmuş kişiler kullanabilir.
+(2) Kayıt sırasında geçerli bir telefon numarası ve ödeme yöntemi tanımlanır.
+
+Kullanım süresi ve ücret
+MADDE 3 – (1) Kiralamanın ilk otuz dakikası ücretsizdir.
+(2) Otuz dakikayı aşan her on beş dakika için 5 TL ücret alınır.
+(3) Bir kiralama en fazla dört saat sürebilir; bu süreyi aşan kullanıcıya ayrıca 100 TL ceza bedeli uygulanır.
+
+Bisikletin iadesi
+MADDE 4 – (1) Bisiklet yalnızca belediyeye ait istasyonlara iade edilir. İstasyon dışında bırakılan bisiklet için kullanıcıdan 50 TL toplama bedeli alınır.
+
+Hasar bildirimi
+MADDE 5 – (1) Kullanıcı, kiralamadan önce fark ettiği hasarı uygulama üzerinden bildirir. Bildirilmeyen hasardan son kullanıcı sorumlu tutulur.
+
+Yürürlük
+MADDE 6 – (1) Bu Yönerge 15 Nisan 2026 tarihinde yürürlüğe girer.
+
+Geçiş hükmü
+GEÇİCİ MADDE 1 – (1) Bu Yönergenin yürürlüğe girdiği tarihten önce kayıt olmuş kullanıcılar, 31 Aralık 2026 tarihine kadar ödeme yöntemlerini güncellemek zorundadır.
