@@ -137,6 +137,41 @@ Notlar:
   eğitim verisinde olduğu için bu görevde contamination riski vardır; skorlar
   bu notla birlikte raporlanmalıdır.
 
+### Baseline karşılaştırması
+
+Toprak skorları ancak aynı görev, sürüm ve ayarlarla ölçülmüş başka
+modellerle yan yana anlam kazanır. Baseline listesi
+[configs/lm_eval_baselines.json](configs/lm_eval_baselines.json) dosyasındadır:
+
+- `small` (≤1B, erişimi açık): YTÜ Cosmos Turkish GPT-2 (124M / 355M / 774M),
+  XGLM-564M, Qwen2.5-0.5B, Qwen3-0.6B-Base;
+- `large` (CUDA önerilir): TURNA (1.1B, encoder-decoder), Kumru-2B-Base,
+  Qwen3-1.7B-Base;
+- `gated` (HF lisans onayı + `HF_TOKEN`): Llama-3.2-1B, Gemma-3-1B.
+
+```bash
+# Baseline raporları (var olanlar atlanır, yarıda kalan koşu sürdürülebilir)
+python scripts/run_baselines.py --tier small
+
+# Toprak raporu
+python evaluation/run_lm_eval.py \
+  --checkpoint checkpoints/toprak_last.pt --preset tr_core \
+  --output evaluation/reports/lm_eval_toprak_last.json
+
+# Karşılaştırma tablosu
+python evaluation/compare_lm_eval.py \
+  evaluation/reports/lm_eval_toprak_last.json \
+  evaluation/reports/baselines/*.json \
+  --output BASELINES.md
+```
+
+`run_lm_eval.py --hf-model <id>` herhangi bir HF modelini aynı rapor şemasıyla
+ölçer; model revizyon SHA'sı rapora sabitlenir. Karşılaştırma scripti
+`--limit` ile üretilmiş raporları reddeder ve lm-eval sürümü, few-shot, görev
+sürümü veya bağlam uzunluğu farklarını uyarı olarak listeler. Toprak Small/Medium
+(512 token) ile adil kıyas için gerekirse `run_baselines.py --max-length 512`
+kullanılır.
+
 ## Veri contamination
 
 `evaluation/benchmarks/` dizini eğitim verisi hazırlanırken contamination

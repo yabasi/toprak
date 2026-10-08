@@ -1,0 +1,24 @@
+{
+  "version": "toprak-baselines-v1",
+  "preset": "tr_core",
+  "num_fewshot": null,
+  "dtype": "float32",
+  "tiers": {
+    "small": "≤1B, erişimi açık; tek Apple Silicon / tüketici GPU'da çalışır",
+    "large": "1B üstü; CUDA önerilir",
+    "gated": "HF'de lisans onayı + HF_TOKEN gerektirir"
+  },
+  "models": [
+    {"id": "ytu-ce-cosmos/turkish-gpt2", "params": "124M", "tier": "small", "group": "Türkçe, sıfırdan"},
+    {"id": "ytu-ce-cosmos/turkish-gpt2-medium", "params": "355M", "tier": "small", "group": "Türkçe, sıfırdan"},
+    {"id": "ytu-ce-cosmos/turkish-gpt2-large", "params": "774M", "tier": "small", "group": "Türkçe, sıfırdan"},
+    {"id": "facebook/xglm-564M", "params": "564M", "tier": "small", "group": "Çok dilli"},
+    {"id": "Qwen/Qwen2.5-0.5B", "params": "494M", "tier": "small", "group": "Çok dilli"},
+    {"id": "Qwen/Qwen3-0.6B-Base", "params": "596M", "tier": "small", "group": "Çok dilli"},
+    {"id": "boun-tabi-LMG/TURNA", "params": "1.1B", "tier": "large", "group": "Türkçe, sıfırdan", "backend": "seq2seq"},
+    {"id": "vngrs/Kumru-2B-Base", "params": "2.4B", "tier": "large", "group": "Türkçe, sıfırdan"},
+    {"id": "Qwen/Qwen3-1.7B-Base", "params": "1.7B", "tier": "large", "group": "Çok dilli"},
+    {"id": "meta-llama/Llama-3.2-1B", "params": "1.2B", "tier": "gated", "group": "Çok dilli"},
+    {"id": "google/gemma-3-1b-pt", "params": "1.0B", "tier": "gated", "group": "Çok dilli"}
+  ]
+}
