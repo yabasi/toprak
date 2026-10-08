@@ -127,7 +127,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Toprak — lm-evaluation-harness ile standart Türkçe benchmarklar"
     )
-    parser.add_argument("--checkpoint", required=True, help="Model checkpoint (.pt)")
+    source = parser.add_mutually_exclusive_group(required=False)
+    source.add_argument("--checkpoint", help="Toprak model checkpoint (.pt)")
+    source.add_argument("--hf-model", help="Karşılaştırma için HuggingFace model ID'si")
+    parser.add_argument("--hf-revision", default="main")
+    parser.add_argument("--hf-backend", default="causal", choices=["causal", "seq2seq"],
+                        help="seq2seq: TURNA gibi encoder-decoder modeller için")
     parser.add_argument("--tokenizer", default="toprak_tokenizer.model")
     parser.add_argument("--preset", choices=sorted(TASK_PRESETS), default=None)
     parser.add_argument("--tasks", default=None, help="Virgülle ayrılmış ek lm-eval görevleri")
@@ -150,26 +155,21 @@ def main():
         for name, tasks in sorted(TASK_PRESETS.items()):
             print(f"{name}: {', '.join(tasks)}")
         return
+    if not (args.checkpoint or args.hf_model):
+        parser.error("--checkpoint veya --hf-model verilmelidir")
 
     tasks = resolve_tasks(args.preset, args.tasks)
 
     import lm_eval
-    from evaluation.lm_eval_adapter import ToprakLMEval
-    from evaluation.suite import file_sha256
-    from utils.validation import validate_checkpoint, validate_tokenizer
 
-    validate_checkpoint(args.checkpoint)
-    validate_tokenizer(args.tokenizer)
-
-    lm = ToprakLMEval(
-        checkpoint=args.checkpoint,
-        tokenizer=args.tokenizer,
-        device=args.device,
-        batch_size=args.batch_size,
-        max_length=args.max_length,
-        dtype=args.dtype,
+    if args.hf_model:
+        lm, model_info = build_hf_model(args)
+    else:
+        lm, model_info = build_toprak_model(args)
+    print(
+        f"  Model: {model_info['name']} | Cihaz: {lm.device} | "
+        f"Bağlam: {lm.max_length} | Görevler: {', '.join(tasks)}"
     )
-    print(f"  Cihaz: {lm.device} | Bağlam: {lm.max_length} | Görevler: {', '.join(tasks)}")
 
     results = lm_eval.simple_evaluate(
         model=lm,
@@ -190,13 +190,11 @@ def main():
 
     if args.output:
         report = {
-            "schema": "toprak-lm-eval-v1",
+            "schema": "toprak-lm-eval-v2",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "git_commit": git_commit(),
             "lm_eval_version": getattr(lm_eval, "__version__", "unknown"),
-            "checkpoint": os.path.abspath(args.checkpoint),
-            "checkpoint_sha256": file_sha256(args.checkpoint),
-            "tokenizer_sha256": file_sha256(args.tokenizer),
+            "model": model_info,
             "settings": {
                 "tasks": tasks,
                 "num_fewshot": args.num_fewshot,
@@ -204,7 +202,7 @@ def main():
                 "batch_size": args.batch_size,
                 "max_length": lm.max_length,
                 "dtype": args.dtype,
-                "device": lm.device,
+                "device": str(lm.device),
                 "seed": args.seed,
             },
             "summary": rows,
@@ -219,6 +217,63 @@ def main():
         with open(args.output, "w", encoding="utf-8") as handle:
             json.dump(report, handle, ensure_ascii=False, indent=2, default=str)
         print(f"\n  ✓ Rapor yazıldı: {args.output}")
+
+
+def build_toprak_model(args):
+    from evaluation.lm_eval_adapter import ToprakLMEval
+    from evaluation.suite import file_sha256
+    from utils.validation import validate_checkpoint, validate_tokenizer
+
+    validate_checkpoint(args.checkpoint)
+    validate_tokenizer(args.tokenizer)
+    lm = ToprakLMEval(
+        checkpoint=args.checkpoint,
+        tokenizer=args.tokenizer,
+        device=args.device,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+        dtype=args.dtype,
+    )
+    return lm, {
+        "type": "toprak",
+        "name": os.path.splitext(os.path.basename(args.checkpoint))[0],
+        "checkpoint": os.path.abspath(args.checkpoint),
+        "checkpoint_sha256": file_sha256(args.checkpoint),
+        "tokenizer_sha256": file_sha256(args.tokenizer),
+        "num_parameters": lm.model.count_parameters(),
+    }
+
+
+def build_hf_model(args):
+    from lm_eval.models.huggingface import HFLM
+
+    revision = args.hf_revision
+    try:
+        from huggingface_hub import model_info
+        revision = model_info(args.hf_model, revision=args.hf_revision).sha or revision
+    except Exception:
+        pass  # Çevrimdışı önbellekten çalışılıyorsa istenen revision kaydedilir.
+
+    if args.device is None:
+        from model.config import detect_device
+        args.device = detect_device()
+
+    lm = HFLM(
+        pretrained=args.hf_model,
+        revision=revision,
+        backend=args.hf_backend,
+        device=args.device,
+        dtype=args.dtype,
+        batch_size=args.batch_size,
+        max_length=args.max_length,
+    )
+    return lm, {
+        "type": "hf",
+        "name": args.hf_model,
+        "revision": revision,
+        "backend": args.hf_backend,
+        "num_parameters": sum(p.numel() for p in lm.model.parameters()),
+    }
 
 
 if __name__ == "__main__":
