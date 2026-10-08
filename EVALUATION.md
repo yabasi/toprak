@@ -93,6 +93,50 @@ Tüm ID'ler benchmark dizini genelinde benzersiz olmalıdır. Loader eksik alanl
 geçersiz seçenek indekslerini ve desteklenmeyen görev tiplerini çalıştırmadan
 önce reddeder.
 
+## Standart benchmarklar (lm-evaluation-harness)
+
+Seed set regresyon göstergesidir; Toprak'ı diğer modellerle kıyaslamak için
+EleutherAI [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+entegrasyonu kullanılır. `evaluation/lm_eval_adapter.py`, `ToprakLM`'i lm-eval
+`LM` arayüzüne (`loglikelihood`, `loglikelihood_rolling`, `generate_until`)
+bağlar ve `toprak` adıyla kaydeder.
+
+```bash
+python evaluation/run_lm_eval.py \
+  --checkpoint checkpoints/toprak_last.pt \
+  --preset tr_core \
+  --output evaluation/reports/lm_eval_toprak_last.json
+```
+
+Hazır görev grupları (`--list-presets` ile listelenir):
+
+| Preset | Görevler | Not |
+|---|---|---|
+| `tr_core` | `xcopa_tr`, `xnli_tr`, `belebele_tur_Latn`, `global_piqa_nonparallel_cloze_tur_latn` | Log-olasılık tabanlı; küçük modellerde de sinyal verir |
+| `tr_knowledge` | `turkishmmlu`, `global_mmlu_full_tr`, `include_base_44_turkish` | Bilgi yoğun; <1B modellerde şans seviyesine yakın olabilir |
+| `tr_generative` | `xquad_tr` | Açgözlü üretim + F1 / exact match |
+| `tr_all` | Hepsi | |
+
+Ek görevler `--tasks gorev1,gorev2` ile eklenir. Hızlı duman testi için
+`--limit 20` kullanılabilir; bu durumda skorlar karşılaştırma için geçerli
+değildir. Konsol tablosu her görevin şans seviyesini de gösterir: şansın
+standart hatanın üzerinde olmayan skorlar anlamlı kabul edilmemelidir.
+
+Rapor; checkpoint ve tokenizer SHA-256 değerlerini, git commit'ini, lm-eval
+sürümünü, görev sürümlerini, few-shot ayarlarını ve seed'i içerir. Farklı
+lm-eval veya görev sürümleriyle üretilmiş skorlar doğrudan kıyaslanmamalıdır.
+
+Notlar:
+
+- Bağlam penceresi varsayılan olarak `config.max_seq_len`'dir; daha uzun
+  girdiler soldan kırpılır. Belebele pasajları 512 tokenlık Small/Medium
+  modellerde kırpılabilir.
+- CUDA'da `--dtype bfloat16` ile karışık hassasiyet kullanılabilir; MPS ve CPU
+  float32 çalışır.
+- Belebele, FLORES-200 üzerinden Wikipedia kaynaklıdır. Türkçe Wikipedia
+  eğitim verisinde olduğu için bu görevde contamination riski vardır; skorlar
+  bu notla birlikte raporlanmalıdır.
+
 ## Veri contamination
 
 `evaluation/benchmarks/` dizini eğitim verisi hazırlanırken contamination

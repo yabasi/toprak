@@ -11,6 +11,9 @@ transformers>=4.30.0
 datasets>=2.14.0
 huggingface_hub>=0.16.0
 
+# Değerlendirme
+lm_eval>=0.4.5                # Standart Türkçe benchmarklar (evaluation/run_lm_eval.py)
+
 # Web Crawler
 aiohttp>=3.8.0
 beautifulsoup4>=4.12.0

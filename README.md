@@ -153,6 +153,7 @@ toprak/
 │   └── chat.py                   #    Terminal tabanlı interaktif sohbet
 │
 ├── evaluation/                   # Değerlendirme
+│   ├── run_lm_eval.py            #    lm-evaluation-harness ile standart Türkçe benchmarklar
 │   ├── eval.py                   #    Perplexity hesaplama
 │   ├── suite.py                  #    Çok boyutlu deterministik eval motoru
 │   ├── evaluate_suite.py         #    Checkpoint karşılaştırma CLI
