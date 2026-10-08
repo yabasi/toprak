@@ -464,6 +464,25 @@ python3 upload/push_to_hub.py --checkpoint checkpoints/toprak_best.pt \
 | **v1.5** | 342M model (Large), RTX 4090 ile eğitim | ⏳ Planlandı |
 | **v2.0** | Sürekli güncelleme, topluluk katkıları, fine-tuning | ⏳ Planlandı |
 | **v2.x altyapısı** | MTP, MoE, YaRN, SFT/DPO/GRPO, RAG, Türk dilleri, cihazda çalıştırma, yorumlanabilirlik | ✅ Kod ve testler hazır; eğitilmiş checkpoint'lerle ölçüm bekliyor |
+| **Standart değerlendirme** | lm-evaluation-harness entegrasyonu, Türkçe görev presetleri, HF baseline karşılaştırması | 🔄 Altyapı hazır; baseline koşuları yarım |
+
+### Devam edilecek işler
+
+**Baseline karşılaştırması** ([EVALUATION.md](EVALUATION.md#baseline-karşılaştırması))
+
+- [x] Cosmos Turkish GPT-2 124M / 355M / 774M — `tr_core` raporları alındı
+- [ ] Batch boyutunu vocab × bağlam × batch logit belleğine göre otomatik sınırlayan
+      kontrol: büyük vocab'lı modeller (XGLM 256K, Qwen 152K) batch 16 / 2048 bağlamda
+      ~33GB logit tensörü üretip 24GB'lık Mac'i swap'e düşürdü
+- [ ] Kalan `small` kademesi: XGLM-564M, Qwen2.5-0.5B, Qwen3-0.6B-Base
+      (RunPod önerilir; Mac'te ancak düşük batch ile, makine boştayken)
+- [ ] `large` kademesi: TURNA (seq2seq), Kumru-2B-Base, Qwen3-1.7B-Base — CUDA'da
+- [ ] Eğitilmiş Toprak checkpoint'i ile `tr_core` koşusu ve `compare_lm_eval.py` ile
+      `BASELINES.md` tablosunun üretilmesi
+- [ ] Standart benchmark metinlerinin (`xcopa_tr`, `xnli_tr`, `belebele_tur_Latn`, ...)
+      `cleaner.py --benchmark-path` contamination filtresine eklenmesi; Belebele
+      FLORES/Wikipedia kaynaklı olduğu için risk yüksek
+- [ ] Toprak Small/Medium (512 token) için `--max-length 512` eşitlenmiş ikinci tablo
 
 ---
 
