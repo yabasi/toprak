@@ -230,6 +230,7 @@ toprak/
 ├── interpret/                    # Morfoloji Mikroskobu: probe, SAE, HTML rapor
 │
 ├── evaluation/                   # Değerlendirme
+│   ├── run_lm_eval.py            #    lm-evaluation-harness ile standart Türkçe benchmarklar
 │   ├── eval.py                   #    Perplexity hesaplama
 │   ├── suite.py                  #    Çok boyutlu deterministik eval motoru
 │   ├── evaluate_suite.py         #    Checkpoint karşılaştırma CLI

@@ -12,6 +12,9 @@ datasets>=2.14.0
 huggingface_hub>=0.16.0
 safetensors>=0.4.0            # export/hf_llama.py (HF/llama.cpp/MLX dışa aktarımı)
 
+# Değerlendirme
+lm_eval>=0.4.5                # Standart Türkçe benchmarklar (evaluation/run_lm_eval.py)
+
 # Web Crawler
 aiohttp>=3.8.0
 beautifulsoup4>=4.12.0
