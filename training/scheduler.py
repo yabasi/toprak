@@ -78,6 +78,13 @@ class CosineWarmupScheduler:
             "min_lr": self.min_lr,
         }
 
+    def set_max_steps(self, max_steps: int) -> float:
+        """Cosine eğrisini yeni bitiş adımına göre yeniden hesapla ve LR'yi uygula."""
+        self.max_steps = max_steps
+        lr = self.get_lr()
+        self._set_lr(lr)
+        return lr
+
     def load_state_dict(self, state_dict: dict):
         """Scheduler durumunu yükle."""
         self.current_step = state_dict["current_step"]

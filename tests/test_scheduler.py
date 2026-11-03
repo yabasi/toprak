@@ -39,6 +39,27 @@ class TestCosineWarmupScheduler(unittest.TestCase):
 
         self.assertAlmostEqual(optimizer.param_groups[0]["lr"], 5e-4)
 
+    def test_set_max_steps_recomputes_finished_schedule(self):
+        parameter = torch.nn.Parameter(torch.tensor(1.0))
+        optimizer = torch.optim.AdamW([parameter], lr=1e-3)
+        scheduler = CosineWarmupScheduler(
+            optimizer,
+            warmup_steps=10,
+            max_steps=100,
+            max_lr=1e-3,
+            min_lr=0.0,
+        )
+        state = scheduler.state_dict()
+        state["current_step"] = 100
+        scheduler.load_state_dict(state)
+        self.assertAlmostEqual(optimizer.param_groups[0]["lr"], 0.0)
+
+        lr = scheduler.set_max_steps(190)
+
+        self.assertEqual(scheduler.max_steps, 190)
+        self.assertAlmostEqual(lr, 5e-4)
+        self.assertAlmostEqual(optimizer.param_groups[0]["lr"], 5e-4)
+
 
 if __name__ == "__main__":
     unittest.main()

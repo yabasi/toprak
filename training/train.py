@@ -680,7 +680,7 @@ def main():
         experiment_manifest=experiment_manifest,
     )
 
-    trainer.train(resume_from=args.resume)
+    trainer.train(resume_from=args.resume, max_steps=args.max_steps)
 
 
 if __name__ == "__main__":

@@ -247,15 +247,17 @@ class ToprakTrainer:
         self._data_batch_in_epoch += 1
         return batch, data_iter
 
-    def train(self, resume_from: Optional[str] = None):
+    def train(self, resume_from: Optional[str] = None, max_steps: Optional[int] = None):
         """
         Ana eğitim döngüsü.
 
         Args:
             resume_from: Checkpoint dosyası (opsiyonel, eğitime devam etmek için)
+            max_steps: Resume'da açıkça verilen bitiş adımı. None ise
+                checkpoint'in LR planı ve bitiş adımı korunur.
         """
         if resume_from:
-            self.load_checkpoint(resume_from)
+            self.load_checkpoint(resume_from, max_steps=max_steps)
             print(f"✓ Checkpoint'ten devam ediliyor: step {self.global_step}")
 
         self.model.train()
@@ -660,7 +662,7 @@ class ToprakTrainer:
         # Eski checkpoint'leri temizle
         self._cleanup_checkpoints()
 
-    def load_checkpoint(self, filepath: str):
+    def load_checkpoint(self, filepath: str, max_steps: Optional[int] = None):
         """Checkpoint'ten devam et."""
         checkpoint = torch.load(filepath, map_location=self.device, weights_only=False)
 
@@ -698,10 +700,40 @@ class ToprakTrainer:
                     state[k] = v.to(self.device)
 
         self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+        self._apply_resume_max_steps(max_steps)
         self.global_step = checkpoint["global_step"]
         self.best_eval_loss = checkpoint.get("best_eval_loss", float("inf"))
         self._resume_data_state = checkpoint.get("data_state")
         self._restore_rng_state(checkpoint.get("rng_state"))
+
+    def _apply_resume_max_steps(self, max_steps: Optional[int]):
+        """Eğitim döngüsü ile scheduler'ın aynı bitiş adımını kullanmasını sağla.
+
+        Scheduler state'i checkpoint'teki max_steps'i geri yükler. Döngü ise
+        config.max_steps'e bakar; ikisi ayrışırsa fazladan adımlar min_lr ile
+        koşar. Açık bir max_steps verilmediyse checkpoint'in planı korunur.
+        """
+        saved_max_steps = self.scheduler.max_steps
+        if max_steps is None or max_steps == saved_max_steps:
+            self.config.max_steps = saved_max_steps
+            return
+
+        old_lr = self.scheduler.get_lr()
+        schedule_finished = self.scheduler.current_step >= saved_max_steps
+        new_lr = self.scheduler.set_max_steps(max_steps)
+        self.config.max_steps = max_steps
+        self.training_recipe["resume_max_steps_override"] = {
+            "from": saved_max_steps, "to": max_steps,
+        }
+        print(f"  ✓ Max steps güncellendi: {saved_max_steps} → {max_steps} "
+              f"(LR {old_lr:.2e} → {new_lr:.2e})")
+        if schedule_finished and new_lr > old_lr:
+            print("  ⚠️  Cosine planı bitmiş bir checkpoint'te LR warmup olmadan "
+                  "yükseliyor. Daha güvenli devam için --init-from ile kısa warmup "
+                  "ve daha düşük --lr kullanın.")
+        if max_steps <= self.scheduler.current_step:
+            print(f"  ⚠️  max_steps ({max_steps}) checkpoint adımından "
+                  f"({self.scheduler.current_step}) küçük; eğitim hemen biter.")
 
     def _cleanup_checkpoints(self):
         """Eski checkpoint'leri sil (son N tanesini tut)."""

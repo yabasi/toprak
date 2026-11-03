@@ -94,6 +94,37 @@ class TestTrainerWithUpgrades(unittest.TestCase):
 
 
 
+class TestResumeMaxSteps(unittest.TestCase):
+
+    def _checkpoints(self, temp_dir):
+        seed_everything(2026, deterministic=True)
+        _, trainer = build(temp_dir, "base")
+        trainer.train()
+        return os.path.join(temp_dir, "base", "toprak_step_{}.pt")
+
+    def test_resume_without_max_steps_keeps_checkpoint_schedule(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = self._checkpoints(temp_dir)
+            _, trainer = build(temp_dir, "resumed")
+            trainer.config.max_steps = 10  # preset varsayılanı checkpoint'ten farklı
+            trainer.train(resume_from=path.format(2))
+            self.assertEqual(trainer.global_step, 4)
+            self.assertEqual(trainer.config.max_steps, 4)
+            self.assertEqual(trainer.scheduler.max_steps, 4)
+
+    def test_explicit_max_steps_extends_finished_schedule(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = self._checkpoints(temp_dir)
+            _, trainer = build(temp_dir, "extended")
+            trainer.load_checkpoint(path.format(4), max_steps=8)
+            self.assertEqual(trainer.scheduler.max_steps, 8)
+            self.assertEqual(trainer.config.max_steps, 8)
+            self.assertGreater(trainer.optimizer.param_groups[0]["lr"], trainer.scheduler.min_lr)
+
+            trainer.train(resume_from=path.format(4), max_steps=8)
+            self.assertEqual(trainer.global_step, 8)
+
+
 class TestInitFrom(unittest.TestCase):
 
     def _dense_checkpoint(self, temp_dir, **overrides):
