@@ -30,6 +30,7 @@ class ModelConfig:
     # Model mimarisi
     vocab_size: int = 32_000
     d_model: int = 512
+    embed_dim: Optional[int] = None
     num_heads: int = 8
     num_kv_heads: int = 2          # GQA: KV head sayısı (< num_heads)
     num_layers: int = 12
@@ -84,6 +85,8 @@ class ModelConfig:
 
     def __post_init__(self):
         """Cihaz otomatik algılama."""
+        if self.embed_dim is not None and self.embed_dim <= 0:
+            raise ValueError(f"embed_dim pozitif olmalı, alınan: {self.embed_dim}")
         if self.device == "auto":
             self.device = detect_device()
 
@@ -101,7 +104,7 @@ class ModelConfig:
     def architecture_dict(self) -> dict:
         """Checkpoint'e yazılan mimari alanlar (modeli yeniden kurmak için yeterli)."""
         keys = [
-            "vocab_size", "d_model", "num_heads", "num_kv_heads", "num_layers",
+            "vocab_size", "d_model", "embed_dim", "num_heads", "num_kv_heads", "num_layers",
             "d_ff", "max_seq_len", "rope_theta", "rope_scaling", "norm_eps",
             "pad_token_id", "bos_token_id", "eos_token_id",
             "num_mtp_heads", "mtp_lambda", "num_experts", "experts_top_k",

@@ -141,7 +141,10 @@ class ToprakLM(nn.Module):
         self.gradient_checkpointing = False  # Eğitim sırasında etkinleştirilebilir
 
         # Token embedding (positional embedding yok — RoPE kullanılıyor)
-        self.tok_emb = nn.Embedding(config.vocab_size, config.d_model)
+        emb_dim = config.embed_dim if config.embed_dim is not None else config.d_model
+        use_factorized = config.embed_dim is not None and config.embed_dim != config.d_model
+        self.tok_emb = nn.Embedding(config.vocab_size, emb_dim)
+        self.emb_proj_in = nn.Linear(emb_dim, config.d_model, bias=False) if use_factorized else None
 
         # Transformer blokları (MoE açıksa her moe_layer_freq'inci blok MoE)
         def _is_moe(layer_idx):
@@ -155,7 +158,8 @@ class ToprakLM(nn.Module):
         self.ln_f = RMSNorm(config.d_model, eps=config.norm_eps)
 
         # Language model head — bias yok
-        self.lm_head = nn.Linear(config.d_model, config.vocab_size, bias=False)
+        self.emb_proj_out = nn.Linear(config.d_model, emb_dim, bias=False) if use_factorized else None
+        self.lm_head = nn.Linear(emb_dim, config.vocab_size, bias=False)
 
         # Weight tying — embedding ve lm_head aynı ağırlıkları paylaşır
         self.tok_emb.weight = self.lm_head.weight
@@ -248,6 +252,11 @@ class ToprakLM(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
+    def _project_logits(self, h: torch.Tensor) -> torch.Tensor:
+        if self.emb_proj_out is not None:
+            h = self.emb_proj_out(h)
+        return self.lm_head(h)
+
     def forward(
         self,
         input_ids,
@@ -276,7 +285,9 @@ class ToprakLM(nn.Module):
         B, T = input_ids.shape
 
         # Token embedding (RoPE sayesinde positional embedding yok)
-        x = self.tok_emb(input_ids)  # (B, T, d_model)
+        x = self.tok_emb(input_ids)
+        if self.emb_proj_in is not None:
+            x = self.emb_proj_in(x)
 
         # RoPE frekansları — mevcut pozisyon offset'ini hesapla
         if past_kvs is not None and past_kvs[0] is not None:
@@ -311,7 +322,7 @@ class ToprakLM(nn.Module):
         x = self.ln_f(x)
 
         # LM Head — logits
-        logits = self.lm_head(x)  # (B, T, vocab_size)
+        logits = self._project_logits(x)  # (B, T, vocab_size)
 
         # Loss hesaplama
         loss = None
@@ -349,7 +360,7 @@ class ToprakLM(nn.Module):
                 for k, head in enumerate(self.mtp_heads, start=1):
                     if T <= k:
                         break
-                    mtp_logits = self.lm_head(head(x[:, :-k]))
+                    mtp_logits = self._project_logits(head(x[:, :-k]))
                     mtp_losses.append(F.cross_entropy(
                         mtp_logits.reshape(-1, self.config.vocab_size),
                         targets[:, k:].reshape(-1),
@@ -381,7 +392,7 @@ class ToprakLM(nn.Module):
         Returns:
             [ (B, T, V), ... ] — başlık k için t+k+1 tahmini
         """
-        return [self.lm_head(head(hidden)) for head in self.mtp_heads]
+        return [self._project_logits(head(hidden)) for head in self.mtp_heads]
 
     def count_parameters(self) -> int:
         """Toplam eğitilebilir parametre sayısı."""
