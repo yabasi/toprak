@@ -221,6 +221,12 @@ class ToprakLM(nn.Module):
         # Ağırlıkları başlat
         self.apply(self._init_weights)
 
+        # Factorized embedding projeksiyonları için varyans koruyan init
+        if self.emb_proj_in is not None:
+            torch.nn.init.normal_(self.emb_proj_in.weight, mean=0.0, std=emb_dim ** -0.5)
+        if self.emb_proj_out is not None:
+            torch.nn.init.normal_(self.emb_proj_out.weight, mean=0.0, std=config.d_model ** -0.5)
+
         # Residual projeksiyonlar için özel scaled init
         for name, p in self.named_parameters():
             if name.endswith("out_proj.weight") or name.endswith("down_proj.weight"):
